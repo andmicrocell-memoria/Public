@@ -1,0 +1,6 @@
+{
+  "name": "ZetaChat AI",
+  "description": "Agente autônomo e assistente de IA integrado para automação de conversas de WhatsApp e respostas do Google Meu Negócio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
