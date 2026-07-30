@@ -1427,8 +1427,10 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
         console.warn("WhatsApp message missing from number, ignoring event.");
         return res.status(200).send("EVENT_RECEIVED");
       }
+      console.info(`[Webhook] inbound message event from=${fromNumber} id=${rawMessageId || "n/a"} type=${messageType}`);
       const messageId = rawMessageId || `${fromNumber}:${message.timestamp || Date.now()}:${fallbackId}`;
       if (messageText && shouldSkipDuplicateReply(fromNumber, messageText)) {
+        console.info(`[Webhook] skipped by recent reply cache from=${fromNumber}`);
         addWebhookLog("system", `Resposta recente ignorada`, `Mensagem duplicada ou retry detectado para ${fromNumber}.`);
         return res.status(200).send("EVENT_RECEIVED");
       }
@@ -1446,6 +1448,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
         try {
           const existingLock = processingLocks.get(fromNumber);
           if (existingLock && Date.now() - existingLock < PROCESSING_LOCK_MS) {
+            console.info(`[Webhook] skipped by processing lock from=${fromNumber}`);
             addWebhookLog("system", `Ignorando processamento concorrente`, `H\xE1 um processamento ativo recente para ${fromNumber}. Evitando resposta duplicada.`);
             if (messageId && db) {
               try {
@@ -1457,6 +1460,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
           }
           processingLocks.set(fromNumber, Date.now());
           if (messageType !== "text" || !messageText) {
+            console.info(`[Webhook] skipped non-text message from=${fromNumber} type=${messageType}`);
             addWebhookLog("system", `Mensagem ignorada de ${customerName}`, `Tipo de mensagem recebida: ${messageType}. Apenas mensagens de texto n\xE3o vazias s\xE3o processadas automaticamente.`);
             if (messageId && db) {
               try {
@@ -1467,6 +1471,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
             return;
           }
           if (isWhatsAppUninterested(messageText)) {
+            console.info(`[Webhook] skipped uninterested contact from=${fromNumber}`);
             addWebhookLog("system", `Contato n\xE3o qualificado`, `Usu\xE1rio de ${fromNumber} indicou falta de interesse: "${messageText}". Pulando resposta de IA.`);
             if (messageId && db) {
               try {
@@ -1500,6 +1505,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
           const incomingPhoneNumberId = value?.metadata?.phone_number_id;
           const { whatsappAccessToken, whatsappPhoneNumberId } = storedConfig;
           if (whatsappPhoneNumberId && incomingPhoneNumberId && String(whatsappPhoneNumberId).trim() !== String(incomingPhoneNumberId).trim()) {
+            console.info(`[Webhook] skipped by phone_number_id mismatch incoming=${incomingPhoneNumberId} configured=${whatsappPhoneNumberId}`);
             addWebhookLog("system", `Mensagem recebida para o ID de Telefone ${incomingPhoneNumberId} ignorada`, `O servidor est\xE1 configurado para responder apenas ao ID ${whatsappPhoneNumberId}. Isso evita conflitos com o n\xFAmero de teste ou outros n\xFAmeros da conta.`);
             console.log(`Webhook ignored: incoming phone_number_id (${incomingPhoneNumberId}) does not match configured ID (${whatsappPhoneNumberId})`);
             if (messageId && db) {
@@ -1511,6 +1517,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
             return;
           }
           if (storedConfig.autoRespondWhatsApp === false || storedConfig.autoRespondWhatsApp === "false") {
+            console.info(`[Webhook] skipped because autoRespondWhatsApp=false from=${fromNumber}`);
             addWebhookLog("system", `Mensagem recebida de ${customerName}, mas Auto-Resposta est\xE1 desativada`, `O rob\xF4 n\xE3o responder\xE1 automaticamente no momento porque o Auto-WhatsApp est\xE1 desativado no painel.`);
             if (messageId && db) {
               try {
@@ -1527,12 +1534,14 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
               messageText: messageText || ""
             });
             if (!claimed) {
+              console.info(`[Webhook] skipped by atomic messageId claim id=${messageId}`);
               addWebhookLog("system", `Mensagem duplicada ignorada (claim at\xF4mico)`, `MessageId j\xE1 processado: ${messageId}`);
               return;
             }
           }
           const fingerprintClaimed = await claimInboundFingerprint(fromNumber, messageText);
           if (!fingerprintClaimed) {
+            console.info(`[Webhook] skipped by content fingerprint from=${fromNumber}`);
             addWebhookLog("system", `Mensagem duplicada por conte\xFAdo ignorada`, `Fingerprint repetido em janela curta para ${fromNumber}.`);
             return;
           }
@@ -1591,6 +1600,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
               );
               replyText = response.text || "Ol\xE1! Desculpe, n\xE3o entendi.";
             } catch (geminiError) {
+              console.error(`[Webhook] Gemini failure from=${fromNumber}:`, geminiError.message || geminiError);
               addWebhookLog("error", "Falha no Gemini", `N\xFAmero: ${fromNumber}. Motivo: ${geminiError.message}`);
               replyText = "Tive uma instabilidade r\xE1pida aqui. Me confirma, por favor, o modelo do aparelho e o defeito para eu continuar seu atendimento agora.";
             }
@@ -1674,6 +1684,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
               });
               const fbResult = await fbResponse.json();
               if (fbResponse.ok) {
+                console.info(`[Webhook] message sent to=${fromNumber} id=${fbResult.messages?.[0]?.id || "n/a"}`);
                 addWebhookLog("system", `Mensagem oficial enviada via API do WhatsApp`, `Mensagem enviada com sucesso para ${fromNumber}. ID: ${fbResult.messages?.[0]?.id || "N/A"}`);
                 try {
                   lastReplyByNumber.set(fromNumber, { timestamp: Date.now(), replyText });
@@ -1685,9 +1696,11 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
                   verboseLog("debug", "Error persisting last reply", String(e));
                 }
               } else {
+                console.error(`[Webhook] WhatsApp API send failure to=${fromNumber}:`, JSON.stringify(fbResult));
                 addWebhookLog("error", `Falha ao enviar mensagem via API do WhatsApp`, JSON.stringify(fbResult));
               }
             } catch (fetchError) {
+              console.error(`[Webhook] request error while sending to=${fromNumber}:`, fetchError.message || fetchError);
               addWebhookLog("error", `Erro na requisi\xE7\xE3o para a API do WhatsApp`, fetchError.message);
             }
           } else {
