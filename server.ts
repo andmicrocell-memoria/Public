@@ -2066,7 +2066,6 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
 }
 
 startServer();
-cd "C:\Users\andmi\Downloads\Nova pasta\zetachat-ai (2)Robo"
 $git = "C:\Program Files\Git\cmd\git.exe"
 & $git add server.ts
 & $git commit -m "Fix context reset on boot and reduce truncated replies"
