@@ -304,7 +304,7 @@ var AI_MODEL_CONTENT = process.env.GEMINI_MODEL_CONTENT || "gemini-3.5-flash";
 var GEMINI_MODEL_FALLBACKS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 var APP_VERSION = process.env.APP_VERSION || "2026-07-30-dedupe-fingerprint-v2";
 var AI_CHAT_HISTORY_LIMIT = Number(process.env.AI_CHAT_HISTORY_LIMIT || 4);
-var AI_CHAT_MAX_OUTPUT_TOKENS = Number(process.env.AI_CHAT_MAX_OUTPUT_TOKENS || 220);
+var AI_CHAT_MAX_OUTPUT_TOKENS = Number(process.env.AI_CHAT_MAX_OUTPUT_TOKENS || 380);
 var AI_REVIEW_MAX_OUTPUT_TOKENS = Number(process.env.AI_REVIEW_MAX_OUTPUT_TOKENS || 180);
 var GEMINI_MODEL_CACHE_TTL_MS = 30 * 60 * 1e3;
 var cachedGeminiModels = null;
@@ -452,6 +452,24 @@ function sanitizeReplyText(text) {
     }
   }
   return deduped.join(" ");
+}
+function hasNaturalSentenceEnding(text) {
+  const trimmed = String(text || "").trim();
+  return /[.!?…)]$/.test(trimmed);
+}
+function finalizeReplyText(rawText, userMessage, config) {
+  const sanitized = sanitizeReplyText(rawText || "");
+  if (!sanitized) {
+    return "Perfeito. Para te ajudar com precis\xE3o, me diga o modelo completo do aparelho e o que est\xE1 acontecendo com ele.";
+  }
+  if (!hasNaturalSentenceEnding(sanitized)) {
+    const lowCost = getLowCostInstantReply(userMessage, config);
+    if (lowCost) {
+      return sanitizeReplyText(lowCost);
+    }
+    return "Perfeito. Para te ajudar com precis\xE3o, me diga o modelo completo do aparelho e o que est\xE1 acontecendo com ele.";
+  }
+  return sanitized;
 }
 function normalizeForReplyCompare(text) {
   if (!text) return "";
@@ -906,7 +924,11 @@ Diretrizes de Conversa\xE7\xE3o (MUITO IMPORTANTE):
             maxOutputTokens: AI_CHAT_MAX_OUTPUT_TOKENS
           }
         );
-        const replyText = response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?";
+        const replyText = finalizeReplyText(
+          response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?",
+          latestUserMessage,
+          config
+        );
         return res.json({ text: replyText });
       } catch (geminiError) {
         console.warn("Gemini unavailable (/api/agent/chat):", geminiError.message);
@@ -1547,11 +1569,11 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
           let replyText = "";
           const clarificationReply = getClarifyingResponseForIncompleteDeviceInfo(messageText, history);
           if (clarificationReply) {
-            replyText = sanitizeReplyText(clarificationReply);
+            replyText = clarificationReply;
           } else {
             const lowCostReply = getLowCostInstantReply(messageText, storedConfig);
             if (lowCostReply) {
-              replyText = sanitizeReplyText(lowCostReply);
+              replyText = lowCostReply;
             }
           }
           if (!replyText) {
@@ -1567,12 +1589,13 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
                   maxOutputTokens: AI_CHAT_MAX_OUTPUT_TOKENS
                 }
               );
-              replyText = sanitizeReplyText(response.text || "Ol\xE1! Desculpe, n\xE3o entendi.");
+              replyText = response.text || "Ol\xE1! Desculpe, n\xE3o entendi.";
             } catch (geminiError) {
               addWebhookLog("error", "Falha no Gemini", `N\xFAmero: ${fromNumber}. Motivo: ${geminiError.message}`);
               return;
             }
           }
+          replyText = finalizeReplyText(replyText, messageText, storedConfig);
           const dedupKey = `${fromNumber}:${normalizeForDedup(messageText)}`;
           recentReplyCache.set(dedupKey, { timestamp: Date.now(), replyText });
           if (recentReplyCache.size > MAX_REPLY_CACHE_ENTRIES) {
@@ -1713,7 +1736,10 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
       res.sendFile(import_path.default.join(distPath, "index.html"));
     });
   }
-  await clearWhatsAppHistory();
+  if (String(process.env.RESET_WHATSAPP_HISTORY_ON_BOOT || "false").toLowerCase() === "true") {
+    await clearWhatsAppHistory();
+    console.warn("WhatsApp history was reset on boot because RESET_WHATSAPP_HISTORY_ON_BOOT=true");
+  }
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT} (http://localhost:${PORT})`);
   });
