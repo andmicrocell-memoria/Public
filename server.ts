@@ -338,7 +338,7 @@ const AI_MODEL_CONTENT = process.env.GEMINI_MODEL_CONTENT || "gemini-3.5-flash";
 const GEMINI_MODEL_FALLBACKS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 const APP_VERSION = process.env.APP_VERSION || "2026-07-30-dedupe-fingerprint-v2";
 const AI_CHAT_HISTORY_LIMIT = Number(process.env.AI_CHAT_HISTORY_LIMIT || 4);
-const AI_CHAT_MAX_OUTPUT_TOKENS = Number(process.env.AI_CHAT_MAX_OUTPUT_TOKENS || 220);
+const AI_CHAT_MAX_OUTPUT_TOKENS = Number(process.env.AI_CHAT_MAX_OUTPUT_TOKENS || 320);
 const AI_REVIEW_MAX_OUTPUT_TOKENS = Number(process.env.AI_REVIEW_MAX_OUTPUT_TOKENS || 180);
 const GEMINI_MODEL_CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -2054,7 +2054,11 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
     });
   }
 
-  await clearWhatsAppHistory();
+  // Never wipe production conversation memory on boot unless explicitly requested.
+  if (String(process.env.RESET_WHATSAPP_HISTORY_ON_BOOT || "false").toLowerCase() === "true") {
+    await clearWhatsAppHistory();
+    console.warn("WhatsApp history was reset on boot because RESET_WHATSAPP_HISTORY_ON_BOOT=true");
+  }
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT} (http://localhost:${PORT})`);
@@ -2062,3 +2066,8 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
 }
 
 startServer();
+cd "C:\Users\andmi\Downloads\Nova pasta\zetachat-ai (2)Robo"
+$git = "C:\Program Files\Git\cmd\git.exe"
+& $git add server.ts
+& $git commit -m "Fix context reset on boot and reduce truncated replies"
+& $git push origin main
