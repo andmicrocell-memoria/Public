@@ -1917,7 +1917,8 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
             replyText = response.text || "Olá! Desculpe, não entendi.";
           } catch (geminiError: any) {
             addWebhookLog('error', 'Falha no Gemini', `Número: ${fromNumber}. Motivo: ${geminiError.message}`);
-            return;
+            // Prevent silent conversations when Gemini has temporary instability.
+            replyText = "Tive uma instabilidade rápida aqui. Me confirma, por favor, o modelo do aparelho e o defeito para eu continuar seu atendimento agora.";
           }
         }
 
