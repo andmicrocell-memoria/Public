@@ -338,7 +338,7 @@ const AI_MODEL_CONTENT = process.env.GEMINI_MODEL_CONTENT || "gemini-3.5-flash";
 const GEMINI_MODEL_FALLBACKS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 const APP_VERSION = process.env.APP_VERSION || "2026-07-30-dedupe-fingerprint-v2";
 const AI_CHAT_HISTORY_LIMIT = Number(process.env.AI_CHAT_HISTORY_LIMIT || 4);
-const AI_CHAT_MAX_OUTPUT_TOKENS = Number(process.env.AI_CHAT_MAX_OUTPUT_TOKENS || 320);
+const AI_CHAT_MAX_OUTPUT_TOKENS = Number(process.env.AI_CHAT_MAX_OUTPUT_TOKENS || 380);
 const AI_REVIEW_MAX_OUTPUT_TOKENS = Number(process.env.AI_REVIEW_MAX_OUTPUT_TOKENS || 180);
 const GEMINI_MODEL_CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -532,6 +532,29 @@ function sanitizeReplyText(text: string): string {
   }
 
   return deduped.join(" ");
+}
+
+function hasNaturalSentenceEnding(text: string): boolean {
+  const trimmed = String(text || "").trim();
+  return /[.!?…)]$/.test(trimmed);
+}
+
+function finalizeReplyText(rawText: string, userMessage: string, config: any): string {
+  const sanitized = sanitizeReplyText(rawText || "");
+  if (!sanitized) {
+    return "Perfeito. Para te ajudar com precisão, me diga o modelo completo do aparelho e o que está acontecendo com ele.";
+  }
+
+  // If Gemini stopped mid-sentence, replace with a deterministic complete response.
+  if (!hasNaturalSentenceEnding(sanitized)) {
+    const lowCost = getLowCostInstantReply(userMessage, config);
+    if (lowCost) {
+      return sanitizeReplyText(lowCost);
+    }
+    return "Perfeito. Para te ajudar com precisão, me diga o modelo completo do aparelho e o que está acontecendo com ele.";
+  }
+
+  return sanitized;
 }
 
 function normalizeForReplyCompare(text: string): string {
@@ -1110,7 +1133,11 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
           }
         );
 
-        const replyText = response.text || "Desculpe, não entendi a sua mensagem. Poderia repetir?";
+        const replyText = finalizeReplyText(
+          response.text || "Desculpe, não entendi a sua mensagem. Poderia repetir?",
+          latestUserMessage,
+          config
+        );
         return res.json({ text: replyText });
       } catch (geminiError: any) {
         console.warn("Gemini unavailable (/api/agent/chat):", geminiError.message);
@@ -1866,11 +1893,11 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
         let replyText = "";
         const clarificationReply = getClarifyingResponseForIncompleteDeviceInfo(messageText, history);
         if (clarificationReply) {
-          replyText = sanitizeReplyText(clarificationReply);
+          replyText = clarificationReply;
         } else {
           const lowCostReply = getLowCostInstantReply(messageText, storedConfig);
           if (lowCostReply) {
-            replyText = sanitizeReplyText(lowCostReply);
+            replyText = lowCostReply;
           }
         }
 
@@ -1887,12 +1914,14 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
                 maxOutputTokens: AI_CHAT_MAX_OUTPUT_TOKENS,
               }
             );
-            replyText = sanitizeReplyText(response.text || "Olá! Desculpe, não entendi.");
+            replyText = response.text || "Olá! Desculpe, não entendi.";
           } catch (geminiError: any) {
             addWebhookLog('error', 'Falha no Gemini', `Número: ${fromNumber}. Motivo: ${geminiError.message}`);
             return;
           }
         }
+
+        replyText = finalizeReplyText(replyText, messageText, storedConfig);
 
         const dedupKey = `${fromNumber}:${normalizeForDedup(messageText)}`;
         recentReplyCache.set(dedupKey, { timestamp: Date.now(), replyText });
@@ -2066,7 +2095,3 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
 }
 
 startServer();
-$git = "C:\Program Files\Git\cmd\git.exe"
-
-& $git commit -m "Fix context reset on boot and reduce truncated replies"
-& $git push origin main
