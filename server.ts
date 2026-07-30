@@ -1695,13 +1695,27 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
       verboseLog('debug', 'Webhook headers snapshot', JSON.stringify({ headers: req.headers }).slice(0,1000));
       try { verboseLog('debug', 'Webhook body length', String(JSON.stringify(body).length)); } catch(e) {}
 
-      // Extract message components
-      const entry = body.entry?.[0];
-      const change = entry?.changes?.[0];
-      const value = change?.value;
-      const message = value?.messages?.[0];
+      // Extract message components robustly (Meta can send statuses first and messages later in the same payload)
+      const entries = Array.isArray(body.entry) ? body.entry : [];
+      let value: any = null;
+      let message: any = null;
+      let totalMessageCandidates = 0;
+
+      for (const entryCandidate of entries) {
+        const changes = Array.isArray(entryCandidate?.changes) ? entryCandidate.changes : [];
+        for (const changeCandidate of changes) {
+          const valueCandidate = changeCandidate?.value;
+          const messagesCandidate = Array.isArray(valueCandidate?.messages) ? valueCandidate.messages : [];
+          totalMessageCandidates += messagesCandidate.length;
+          if (!message && messagesCandidate.length > 0) {
+            value = valueCandidate;
+            message = messagesCandidate[0];
+          }
+        }
+      }
 
       if (!message) {
+        console.info(`[Webhook] no inbound message in payload (messageCandidates=${totalMessageCandidates})`);
         // Not a message event (could be statuses like delivered/read)
         return res.status(200).send("EVENT_RECEIVED");
       }
