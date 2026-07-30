@@ -336,7 +336,7 @@ const AI_MODEL_CHAT = process.env.GEMINI_MODEL_CHAT || "gemini-2.5-flash-lite";
 const AI_MODEL_REVIEW = process.env.GEMINI_MODEL_REVIEW || "gemini-2.5-flash-lite";
 const AI_MODEL_CONTENT = process.env.GEMINI_MODEL_CONTENT || "gemini-3.5-flash";
 const GEMINI_MODEL_FALLBACKS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
-const APP_VERSION = process.env.APP_VERSION || "2026-07-30-dedupe-fingerprint-v2";
+const APP_VERSION = process.env.APP_VERSION || "2026-07-30-webhook-lock-pass-through-v3";
 const AI_CHAT_HISTORY_LIMIT = Number(process.env.AI_CHAT_HISTORY_LIMIT || 4);
 const AI_CHAT_MAX_OUTPUT_TOKENS = Number(process.env.AI_CHAT_MAX_OUTPUT_TOKENS || 380);
 const AI_REVIEW_MAX_OUTPUT_TOKENS = Number(process.env.AI_REVIEW_MAX_OUTPUT_TOKENS || 180);
@@ -1699,6 +1699,7 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
       const entries = Array.isArray(body.entry) ? body.entry : [];
       let value: any = null;
       let message: any = null;
+      let selectedTs = 0;
       let totalMessageCandidates = 0;
 
       for (const entryCandidate of entries) {
@@ -1707,9 +1708,16 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
           const valueCandidate = changeCandidate?.value;
           const messagesCandidate = Array.isArray(valueCandidate?.messages) ? valueCandidate.messages : [];
           totalMessageCandidates += messagesCandidate.length;
-          if (!message && messagesCandidate.length > 0) {
-            value = valueCandidate;
-            message = messagesCandidate[0];
+          if (messagesCandidate.length > 0) {
+            // Choose the newest inbound message in this payload batch to preserve latest context.
+            for (const candidateMessage of messagesCandidate) {
+              const candidateTs = Number(candidateMessage?.timestamp || 0);
+              if (!message || candidateTs >= selectedTs) {
+                value = valueCandidate;
+                message = candidateMessage;
+                selectedTs = candidateTs;
+              }
+            }
           }
         }
       }
@@ -1767,12 +1775,8 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
           // Prevent concurrent processing for the same phone number
           const existingLock = processingLocks.get(fromNumber);
           if (existingLock && (Date.now() - existingLock) < PROCESSING_LOCK_MS) {
-            console.info(`[Webhook] skipped by processing lock from=${fromNumber}`);
-            addWebhookLog('system', `Ignorando processamento concorrente`, `Há um processamento ativo recente para ${fromNumber}. Evitando resposta duplicada.`);
-            if (messageId && db) {
-              try { await setDoc(doc(db, "processed_messages", messageId), { processedAt: new Date().toISOString(), concurrentIgnored: true }); } catch (e) {}
-            }
-            return;
+            console.info(`[Webhook] concurrent message allowed from=${fromNumber} (lock age=${Date.now() - existingLock}ms)`);
+            addWebhookLog('system', `Mensagem concorrente recebida`, `Processamento paralelo permitido para ${fromNumber}; deduplicação por messageId/fingerprint permanece ativa.`);
           }
           processingLocks.set(fromNumber, Date.now());
         // 3. Message Type Verification
