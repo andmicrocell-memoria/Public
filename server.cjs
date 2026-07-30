@@ -32,26 +32,12 @@ var import_fs = __toESM(require("fs"), 1);
 var import_app = require("firebase/app");
 var import_firestore = require("firebase/firestore");
 var import_meta = {};
-var envPath = import_fs.default.existsSync(import_path.default.resolve(process.cwd(), ".env.local")) ? import_path.default.resolve(process.cwd(), ".env.local") : import_path.default.resolve(process.cwd(), ".env");
-import_dotenv.default.config({ path: envPath });
+import_dotenv.default.config();
 var resolvedFilename = typeof import_meta !== "undefined" && import_meta.url ? (0, import_url.fileURLToPath)(import_meta.url) : typeof __filename !== "undefined" ? __filename : process.cwd();
 var resolvedDirname = typeof import_meta !== "undefined" && import_meta.url ? import_path.default.dirname(resolvedFilename) : typeof __dirname !== "undefined" ? __dirname : process.cwd();
 var webhookLogs = [
   { id: "init-log-1", timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR"), direction: "system", message: "Sistema de Webhook Oficial Inicializado", details: "Aguardando requisi\xE7\xF5es do Meta Developer Portal" }
 ];
-var verboseLogs = false;
-var setVerboseLogs = (v) => {
-  verboseLogs = !!v;
-  addWebhookLog("system", `Verbose logs ${v ? "ativados" : "desativados"}`, `verboseLogs=${v}`);
-};
-var verboseLog = (direction, message, details) => {
-  if (!verboseLogs) return;
-  addWebhookLog(direction === "debug" ? "system" : direction, message, details);
-  try {
-    console.debug(`[VERBOSE] ${message}`, details || "");
-  } catch (e) {
-  }
-};
 var addWebhookLog = (direction, message, details) => {
   const newLog = {
     id: `wlog-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -96,33 +82,6 @@ function loadStoredConfig() {
       return JSON.parse(import_fs.default.readFileSync(configFilePath, "utf8"));
     } catch (e) {
       console.error("Error reading config file:", e);
-      try {
-        const raw = import_fs.default.readFileSync(configFilePath, "utf8");
-        console.error("Raw config file length:", raw.length, "content preview:", raw.slice(0, 300));
-        const backupPath = `${configFilePath}.invalid-${Date.now()}`;
-        import_fs.default.copyFileSync(configFilePath, backupPath);
-        console.error(`Invalid config file backed up to ${backupPath}`);
-      } catch (backupError) {
-        console.error("Failed to backup invalid config file:", backupError);
-      }
-      const fallbackConfig = {
-        name: "AndMicrocell - Assist\xEAncia T\xE9cnica",
-        category: "Assist\xEAncia T\xE9cnica",
-        address: "Rua Exemplo, 123",
-        phone: "(81) 99999-9999",
-        businessHours: "Segunda a Sexta: 08h \xE0s 12h e das 14h \xE0s 18h | S\xE1bados: 09h \xE0s 13h",
-        tone: "acolhedor, profissional e \xE1gil",
-        specialOffers: "",
-        faqs: [],
-        whatsappVerifyToken: "zetachat_secret_token"
-      };
-      try {
-        import_fs.default.writeFileSync(configFilePath, JSON.stringify(fallbackConfig, null, 2), "utf8");
-        console.error("Replaced invalid config file with fallback defaults.");
-      } catch (writeError) {
-        console.error("Failed to write fallback config file:", writeError);
-      }
-      return fallbackConfig;
     }
   }
   return null;
@@ -137,9 +96,34 @@ function saveStoredConfig(config) {
 }
 var db = null;
 try {
+  let firebaseConfig = null;
   const firebaseConfigPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
   if (import_fs.default.existsSync(firebaseConfigPath)) {
-    const firebaseConfig = JSON.parse(import_fs.default.readFileSync(firebaseConfigPath, "utf8"));
+    try {
+      firebaseConfig = JSON.parse(import_fs.default.readFileSync(firebaseConfigPath, "utf8"));
+      console.log("Firebase config loaded successfully from firebase-applet-config.json");
+    } catch (parseErr) {
+      console.error("Failed to parse firebase-applet-config.json:", parseErr.message);
+    }
+  }
+  if (!firebaseConfig) {
+    const envApiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY;
+    const envProjectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+    const envAppId = process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID;
+    if (envApiKey && envProjectId && envAppId) {
+      firebaseConfig = {
+        apiKey: envApiKey,
+        authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || `${envProjectId}.firebaseapp.com`,
+        projectId: envProjectId,
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || `${envProjectId}.firebasestorage.app`,
+        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: envAppId,
+        firestoreDatabaseId: process.env.FIREBASE_FIRESTORE_DATABASE_ID || process.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || process.env.DATABASE_ID
+      };
+      console.log("Firebase config loaded from environment variables");
+    }
+  }
+  if (firebaseConfig) {
     const firebaseApp = (0, import_app.initializeApp)({
       apiKey: firebaseConfig.apiKey,
       authDomain: firebaseConfig.authDomain,
@@ -148,10 +132,11 @@ try {
       messagingSenderId: firebaseConfig.messagingSenderId,
       appId: firebaseConfig.appId
     });
-    db = (0, import_firestore.getFirestore)(firebaseApp, firebaseConfig.firestoreDatabaseId || "(default)");
-    console.log("Firebase Firestore initialized successfully in server with Database ID:", firebaseConfig.firestoreDatabaseId || "(default)");
+    const databaseId = firebaseConfig.firestoreDatabaseId || "(default)";
+    db = (0, import_firestore.getFirestore)(firebaseApp, databaseId);
+    console.log("Firebase Firestore initialized successfully in server with Database ID:", databaseId);
   } else {
-    console.warn("firebase-applet-config.json not found, falling back to local files.");
+    console.warn("No Firebase configuration found (neither firebase-applet-config.json nor environment variables are set). Falling back to local files.");
   }
 } catch (e) {
   console.error("Failed to initialize Firebase:", e.message);
@@ -288,410 +273,62 @@ async function runFirebaseMigrations() {
 }
 var inMemoryHistoryCache = {};
 var processedMessageIds = /* @__PURE__ */ new Set();
-var recentReplyCache = /* @__PURE__ */ new Map();
-var lastReplyByNumber = /* @__PURE__ */ new Map();
-var processingLocks = /* @__PURE__ */ new Map();
-var PROCESSING_LOCK_MS = 1e4;
-var REPLY_COOLDOWN_MS = 8e3;
-var REPLY_SIMILARITY_GUARD_MS = Number(process.env.REPLY_SIMILARITY_GUARD_MS || 18e4);
-var MAX_REPLY_CACHE_ENTRIES = 200;
-var INBOUND_FINGERPRINT_COOLDOWN_MS = Number(process.env.INBOUND_FINGERPRINT_COOLDOWN_MS || 12e4);
-var MAX_INBOUND_FINGERPRINT_CACHE_ENTRIES = 1500;
-var inboundFingerprintCache = /* @__PURE__ */ new Map();
-var AI_MODEL_CHAT = process.env.GEMINI_MODEL_CHAT || "gemini-2.5-flash-lite";
-var AI_MODEL_REVIEW = process.env.GEMINI_MODEL_REVIEW || "gemini-2.5-flash-lite";
-var AI_MODEL_CONTENT = process.env.GEMINI_MODEL_CONTENT || "gemini-3.5-flash";
-var GEMINI_MODEL_FALLBACKS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
-var APP_VERSION = process.env.APP_VERSION || "2026-07-30-webhook-lock-pass-through-v3";
-var AI_CHAT_HISTORY_LIMIT = Number(process.env.AI_CHAT_HISTORY_LIMIT || 4);
-var AI_CHAT_MAX_OUTPUT_TOKENS = Number(process.env.AI_CHAT_MAX_OUTPUT_TOKENS || 380);
-var AI_REVIEW_MAX_OUTPUT_TOKENS = Number(process.env.AI_REVIEW_MAX_OUTPUT_TOKENS || 180);
-var GEMINI_MODEL_CACHE_TTL_MS = 30 * 60 * 1e3;
-var cachedGeminiModels = null;
-var cachedGeminiModelsAt = 0;
-var persistentLastReplyReadDisabled = false;
-var persistentLastReplyWriteDisabled = false;
-function normalizeModelName(model) {
-  return String(model || "").replace(/^models\//i, "").trim();
-}
-function isGeminiModelUnavailableError(err) {
-  const message = String(err?.message || err || "").toLowerCase();
-  return message.includes("no longer available") || message.includes("not_found") || message.includes("not found");
-}
-function isFirestorePermissionDenied(err) {
-  const text = `${String(err?.code || "")} ${String(err?.message || err || "")}`.toLowerCase();
-  return text.includes("permission_denied") || text.includes("permission-denied") || text.includes("insufficient permissions");
-}
-async function getAvailableGeminiModels(client) {
-  const isCacheFresh = cachedGeminiModels && Date.now() - cachedGeminiModelsAt < GEMINI_MODEL_CACHE_TTL_MS;
-  if (isCacheFresh) return cachedGeminiModels;
-  try {
-    const pager = await client.models.list();
-    const available = /* @__PURE__ */ new Set();
-    for await (const m of pager) {
-      const methods = m?.supportedActions || m?.supportedGenerationMethods || [];
-      const supportsGenerateContent = JSON.stringify(methods).toLowerCase().includes("generatecontent");
-      if (!supportsGenerateContent) continue;
-      const normalized = normalizeModelName(m?.name);
-      if (normalized) available.add(normalized);
-    }
-    if (available.size > 0) {
-      cachedGeminiModels = available;
-      cachedGeminiModelsAt = Date.now();
-      return available;
-    }
-  } catch (e) {
-    console.warn("Unable to list Gemini models. Proceeding with configured candidates:", e?.message || e);
-  }
-  return null;
-}
-async function generateContentWithModelFallback(client, preferredModel, contents, config, extraFallbacks = []) {
-  const candidates = Array.from(new Set([
-    normalizeModelName(preferredModel),
-    ...extraFallbacks.map(normalizeModelName),
-    ...GEMINI_MODEL_FALLBACKS.map(normalizeModelName)
-  ].filter(Boolean)));
-  const availableModels = await getAvailableGeminiModels(client);
-  const modelsToTry = availableModels && availableModels.size > 0 ? candidates.filter((model) => availableModels.has(model)) : candidates;
-  const finalModelsToTry = modelsToTry.length > 0 ? modelsToTry : candidates;
-  let lastError = null;
-  for (const model of finalModelsToTry) {
-    try {
-      const response = await client.models.generateContent({
-        model,
-        contents,
-        config
-      });
-      return { response, modelUsed: model };
-    } catch (e) {
-      lastError = e;
-      if (isGeminiModelUnavailableError(e)) {
-        try {
-          cachedGeminiModels?.delete(model);
-        } catch (cacheErr) {
-        }
-        console.warn(`Gemini model unavailable (${model}). Trying next candidate...`);
-        continue;
-      }
-      throw e;
-    }
-  }
-  throw lastError || new Error("No available Gemini model candidate succeeded.");
-}
-function normalizeForDedup(text) {
-  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
-}
-function hashString(input) {
-  let hash = 5381;
-  for (let i = 0; i < input.length; i++) {
-    hash = (hash << 5) + hash + input.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36);
-}
-function buildInboundFingerprint(fromNumber, messageText) {
-  return `${String(fromNumber || "").trim()}:${normalizeForDedup(messageText || "")}`;
-}
-function touchInboundFingerprintCache(fingerprint) {
-  inboundFingerprintCache.set(fingerprint, Date.now());
-  if (inboundFingerprintCache.size > MAX_INBOUND_FINGERPRINT_CACHE_ENTRIES) {
-    const oldest = inboundFingerprintCache.keys().next().value;
-    if (oldest) inboundFingerprintCache.delete(oldest);
-  }
-}
-async function claimInboundFingerprint(fromNumber, messageText) {
-  const fingerprint = buildInboundFingerprint(fromNumber, messageText);
-  if (!fingerprint || fingerprint.endsWith(":")) return true;
-  const now = Date.now();
-  const localSeenAt = inboundFingerprintCache.get(fingerprint) || 0;
-  if (localSeenAt && now - localSeenAt < INBOUND_FINGERPRINT_COOLDOWN_MS) {
-    return false;
-  }
-  touchInboundFingerprintCache(fingerprint);
-  if (!db) return true;
-  const docId = `fp_${hashString(fingerprint)}`;
-  let claimed = false;
-  try {
-    await (0, import_firestore.runTransaction)(db, async (tx) => {
-      const ref = (0, import_firestore.doc)(db, "processed_messages", docId);
-      const snap = await tx.get(ref);
-      const data = snap.exists() ? snap.data() : null;
-      const lastSeenMs = Number(data?.lastSeenMs || 0);
-      if (lastSeenMs && now - lastSeenMs < INBOUND_FINGERPRINT_COOLDOWN_MS) {
-        claimed = false;
-        return;
-      }
-      tx.set(ref, {
-        type: "inbound_fingerprint",
-        fromNumber,
-        preview: normalizeForDedup(messageText).slice(0, 100),
-        lastSeenMs: now,
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      }, { merge: true });
-      claimed = true;
-    });
-  } catch (e) {
-    console.error("[Deduplication] Error claiming inbound fingerprint:", e.message || e);
-    return true;
-  }
-  return claimed;
-}
-function sanitizeReplyText(text) {
-  if (!text) return text;
-  const cleaned = text.replace(/\s+/g, " ").trim();
-  const sentences = cleaned.split(/(?<=[.!?])\s+/).filter(Boolean);
-  if (sentences.length <= 1) {
-    return cleaned;
-  }
-  const deduped = [];
-  for (const sentence of sentences) {
-    const trimmed = sentence.replace(/\s+/g, " ").trim();
-    const alreadyIncluded = deduped.some((prev) => prev.toLowerCase() === trimmed.toLowerCase());
-    if (!alreadyIncluded) {
-      deduped.push(trimmed);
-    }
-  }
-  return deduped.join(" ");
-}
-function hasNaturalSentenceEnding(text) {
-  const trimmed = String(text || "").trim();
-  return /[.!?…)]$/.test(trimmed);
-}
-function finalizeReplyText(rawText, userMessage, config) {
-  const sanitized = sanitizeReplyText(rawText || "");
-  if (!sanitized) {
-    return "Perfeito. Para te ajudar com precis\xE3o, me diga o modelo completo do aparelho e o que est\xE1 acontecendo com ele.";
-  }
-  if (!hasNaturalSentenceEnding(sanitized)) {
-    const lowCost = getLowCostInstantReply(userMessage, config);
-    if (lowCost) {
-      return sanitizeReplyText(lowCost);
-    }
-    return "Perfeito. Para te ajudar com precis\xE3o, me diga o modelo completo do aparelho e o que est\xE1 acontecendo com ele.";
-  }
-  return sanitized;
-}
-function normalizeForReplyCompare(text) {
-  if (!text) return "";
-  return text.normalize("NFD").replace(/[ -\u0020\u0300-\u036f]/g, " ").replace(/[^a-zA-Z0-9\s]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
-}
-function areRepliesSimilar(a, b) {
-  const na = normalizeForReplyCompare(a || "");
-  const nb = normalizeForReplyCompare(b || "");
-  if (!na || !nb) return false;
-  if (na === nb) return true;
-  const minLen = Math.min(na.length, nb.length);
-  const maxLen = Math.max(na.length, nb.length);
-  if ((na.includes(nb) || nb.includes(na)) && (maxLen - minLen) / maxLen < 0.35) {
-    return true;
-  }
-  try {
-    const firstSentence = (s) => {
-      const m = s.split(/[.!?]/).map((x) => x.trim()).filter(Boolean);
-      return m.length ? m[0] : s;
-    };
-    const fa = firstSentence(na);
-    const fb = firstSentence(nb);
-    if (fa && fb) {
-      const wa = new Set(fa.split(/\s+/));
-      const wb = new Set(fb.split(/\s+/));
-      let inter = 0;
-      for (const w of wa) if (wb.has(w)) inter++;
-      const union = (/* @__PURE__ */ new Set([...wa, ...wb])).size || 1;
-      const jaccard = inter / union;
-      if (jaccard > 0.45) return true;
-    }
-  } catch (e) {
-  }
-  return false;
-}
-async function getPersistentLastReply(fromNumber) {
-  if (!db || persistentLastReplyReadDisabled) return null;
-  try {
-    const ref = (0, import_firestore.doc)(db, "last_replies", fromNumber);
-    const snap = await (0, import_firestore.getDoc)(ref);
-    if (snap.exists()) return snap.data();
-  } catch (e) {
-    if (isFirestorePermissionDenied(e)) {
-      persistentLastReplyReadDisabled = true;
-      console.warn("Persistent last_replies read disabled due Firestore permissions.");
-      return null;
-    }
-    console.error("Error reading persistent last reply:", e.message || e);
-  }
-  return null;
-}
-async function setPersistentLastReply(fromNumber, replyText) {
-  if (!db || persistentLastReplyWriteDisabled) return;
-  try {
-    await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "last_replies", fromNumber), {
-      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-      replyText
-    });
-  } catch (e) {
-    if (isFirestorePermissionDenied(e)) {
-      persistentLastReplyWriteDisabled = true;
-      console.warn("Persistent last_replies write disabled due Firestore permissions.");
-      return;
-    }
-    console.error("Error saving persistent last reply:", e.message || e);
-  }
-}
-async function claimProcessedMessage(messageId, payload) {
-  if (!db || !messageId) return true;
-  let claimed = false;
-  try {
-    await (0, import_firestore.runTransaction)(db, async (tx) => {
-      const ref = (0, import_firestore.doc)(db, "processed_messages", messageId);
-      const snap = await tx.get(ref);
-      if (snap.exists()) {
-        return;
-      }
-      tx.set(ref, {
-        processedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        ...payload
-      });
-      claimed = true;
-    });
-  } catch (e) {
-    console.error("[Deduplication] Error claiming processed message in Firestore:", e.message || e);
-    return true;
-  }
-  return claimed;
-}
-function getClarifyingResponseForIncompleteDeviceInfo(messageText, history = []) {
-  const text = (messageText || "").trim();
-  if (!text) return null;
-  const combinedText = [text, ...history.slice(-3).map((m) => m.text || "")].join(" ");
-  const lowerText = combinedText.toLowerCase();
-  const hasUnknownModel = /\b(nao sei|não sei|nao lembro|não lembro|nao tenho ideia|não tenho ideia|sem ideia|não sei o modelo|nao sei o modelo)\b/.test(lowerText);
-  const brandMatch = /\b(xiaomi|samsung|motorola|iphone|apple|asus|lenovo|dell|hp|acer|sony|lg|oneplus|realme|redmi|pixel|nokia|moto)\b/.exec(lowerText);
-  const hasDeviceContext = /\b(celular|aparelho|telefone|smartphone|dispositivo|modelo|marca)\b/.test(lowerText);
-  const hasExplicitModel = /\b(note|redmi|poco|mi|iphone|galaxy|moto|edge|a|s|m|pro|plus|ultra|lite|max|mini)\b/.test(lowerText) && /\b\d{1,3}\b/.test(lowerText);
-  if (hasExplicitModel) return null;
-  if (hasUnknownModel || brandMatch && hasDeviceContext) {
-    const brandLabel = brandMatch ? brandMatch[0].charAt(0).toUpperCase() + brandMatch[0].slice(1) : "seu aparelho";
-    return hasUnknownModel ? "Tudo bem, sem problema. Para te ajudar corretamente, me diga a marca e o modelo completo do aparelho. Se voc\xEA n\xE3o souber, pode me mandar uma foto ou descrever o aparelho para eu te orientar melhor." : `Perfeito, j\xE1 entendi a marca. Para te ajudar com precis\xE3o, me diga o modelo completo do aparelho, por exemplo: ${brandLabel} Note 12 4G.`;
-  }
-  return null;
-}
-function getLowCostInstantReply(messageText, config) {
-  const text = String(messageText || "").trim();
-  if (!text) return null;
-  const normalized = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").toLowerCase();
-  const asksHours = /\b(horario|horarios|hora|abre|aberto|fecha|funcionamento)\b/.test(normalized);
-  if (asksHours) {
-    return `Nosso hor\xE1rio \xE9 ${config?.businessHours || "Segunda a sexta, em hor\xE1rio comercial"}. Se quiser, j\xE1 adianto seu atendimento agora e deixo seu or\xE7amento encaminhado.`;
-  }
-  const asksAddress = /\b(endereco|endereço|localizacao|localização|onde fica|aonde fica|local)\b/.test(normalized);
-  if (asksAddress) {
-    return config?.address ? `Estamos em: ${config.address}. Se quiser, j\xE1 te envio a refer\xEAncia e deixo seu hor\xE1rio pr\xE9-agendado.` : "Atendemos na loja f\xEDsica e por WhatsApp. Me diga seu bairro que eu te passo a melhor forma de trazer o aparelho para avalia\xE7\xE3o gratuita.";
-  }
-  const asksPhone = /\b(telefone|whatsapp|contato|numero|número)\b/.test(normalized);
-  if (asksPhone) {
-    return `Pode falar por aqui mesmo no WhatsApp ${config?.phone || "da loja"}. Me diga modelo e defeito que eu j\xE1 te passo a faixa de valor e o pr\xF3ximo passo.`;
-  }
-  const greetingsOnly = /^(oi|ola|olá|bom dia|boa tarde|boa noite|opa|e ai|e aí)\b/.test(normalized) && normalized.length <= 20;
-  if (greetingsOnly) {
-    return "Ol\xE1. Me diga o modelo do aparelho e o defeito para eu te passar uma estimativa agora e j\xE1 adiantar seu atendimento.";
-  }
-  const asksPriceOnly = /\b(preco|preço|valor|orcamento|orçamento|quanto custa|quanto fica)\b/.test(normalized);
-  const hasDeviceModelHint = /\b(iphone|samsung|motorola|xiaomi|redmi|poco|galaxy|moto|note|a\d\d?|s\d\d?)\b/.test(normalized);
-  if (asksPriceOnly && !hasDeviceModelHint) {
-    return "Consigo te passar uma faixa agora. Me diga marca e modelo completo para te responder com precis\xE3o e j\xE1 deixar seu atendimento encaminhado.";
-  }
-  if (asksPriceOnly && hasDeviceModelHint) {
-    return "Perfeito. Para te passar valor justo sem erro, me confirma o modelo exato e o problema (tela, bateria, conector ou outro). Com isso j\xE1 te envio faixa de pre\xE7o e pr\xF3ximo passo.";
-  }
-  return null;
-}
-function shouldSkipDuplicateReply(fromNumber, messageText) {
-  const normalizedIncoming = normalizeForDedup(messageText);
-  const cacheKey = `${fromNumber}:${normalizedIncoming}`;
-  const cachedReply = recentReplyCache.get(cacheKey);
-  if (!cachedReply) {
-    return false;
-  }
-  const isRecent = Date.now() - cachedReply.timestamp < REPLY_COOLDOWN_MS;
-  if (!isRecent) {
-    recentReplyCache.delete(cacheKey);
-    return false;
-  }
-  return true;
-}
-async function clearWhatsAppHistory(fromNumber) {
-  if (fromNumber) {
-    if (db) {
-      try {
-        await (0, import_firestore.deleteDoc)((0, import_firestore.doc)(db, "whatsapp_history", fromNumber));
-      } catch (e) {
-        console.error("Error clearing WhatsApp history from Firestore:", e.message);
-      }
-    }
-    delete inMemoryHistoryCache[fromNumber];
-    for (const key of Array.from(recentReplyCache.keys())) {
-      if (key.startsWith(`${fromNumber}:`)) {
-        recentReplyCache.delete(key);
-      }
-    }
-  } else {
-    if (db) {
-      try {
-        const historySnapshot = await (0, import_firestore.getDocs)((0, import_firestore.collection)(db, "whatsapp_history"));
-        for (const historyDoc of historySnapshot.docs) {
-          await (0, import_firestore.deleteDoc)((0, import_firestore.doc)(db, "whatsapp_history", historyDoc.id));
-        }
-      } catch (e) {
-        console.error("Error clearing all WhatsApp history from Firestore:", e.message);
-      }
-    }
-    Object.keys(inMemoryHistoryCache).forEach((key) => delete inMemoryHistoryCache[key]);
-    recentReplyCache.clear();
-  }
-  processedMessageIds.clear();
-}
 async function getWhatsAppHistory(fromNumber) {
+  const cleanNumber = String(fromNumber).replace(/\D/g, "");
+  if (!cleanNumber) return [];
   if (db) {
     try {
-      const historyDocRef = (0, import_firestore.doc)(db, "whatsapp_history", fromNumber);
+      const historyDocRef = (0, import_firestore.doc)(db, "whatsapp_history", cleanNumber);
       const snapshot = await (0, import_firestore.getDoc)(historyDocRef);
       if (snapshot.exists()) {
-        return snapshot.data().messages || [];
+        const messages = snapshot.data().messages || [];
+        try {
+          ensureConfigDir();
+          const historyFilePath = import_path.default.join(configDir, `history_${cleanNumber}.json`);
+          import_fs.default.writeFileSync(historyFilePath, JSON.stringify({ messages }, null, 2), "utf8");
+        } catch (e) {
+        }
+        inMemoryHistoryCache[cleanNumber] = messages;
+        return messages;
       }
     } catch (e) {
-      console.error("Error reading WhatsApp history from Firestore:", e.message);
+      console.error(`Error reading WhatsApp history from Firestore for ${cleanNumber}:`, e.message);
     }
   }
-  return inMemoryHistoryCache[fromNumber] || [];
-}
-var uninterestedPatterns = [
-  /\b(n[aã]o quero|nao quero|nao tenho interesse|não tenho interesse|nao interessa|não interessa|nao desejo|não desejo|sem interesse|ja tenho|já tenho|ja vou|já vou|ja resolvido|já resolvido|ja foi|já foi|passo|passar|depois eu vejo|depois vejo|fique com|vou ver depois|ja resolvi|já resolvi)\b/i
-];
-var uninterestedShortReplies = [
-  /^(ok|beleza|valeu|obrigado|obrigada|brigado|thanks|thank you|tudo bem|certo|show|blz)$/i
-];
-function isWhatsAppUninterested(text) {
-  if (!text) return false;
-  const normalized = text.normalize("NFD").replace(/[ --]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
-  if (uninterestedPatterns.some((pattern) => pattern.test(normalized))) {
-    return true;
+  try {
+    ensureConfigDir();
+    const historyFilePath = import_path.default.join(configDir, `history_${cleanNumber}.json`);
+    if (import_fs.default.existsSync(historyFilePath)) {
+      const fileData = JSON.parse(import_fs.default.readFileSync(historyFilePath, "utf8"));
+      const messages = fileData.messages || [];
+      inMemoryHistoryCache[cleanNumber] = messages;
+      return messages;
+    }
+  } catch (fileErr) {
+    console.error(`Error reading local backup history file for ${cleanNumber}:`, fileErr.message);
   }
-  if (normalized.length <= 30 && uninterestedShortReplies.some((pattern) => pattern.test(normalized))) {
-    return true;
-  }
-  return false;
+  return inMemoryHistoryCache[cleanNumber] || [];
 }
 async function saveWhatsAppHistory(fromNumber, messages) {
+  const cleanNumber = String(fromNumber).replace(/\D/g, "");
+  if (!cleanNumber) return;
   const sliced = messages.slice(-15);
   if (db) {
     try {
-      const historyDocRef = (0, import_firestore.doc)(db, "whatsapp_history", fromNumber);
+      const historyDocRef = (0, import_firestore.doc)(db, "whatsapp_history", cleanNumber);
       await (0, import_firestore.setDoc)(historyDocRef, { messages: sliced });
     } catch (e) {
-      console.error("Error saving WhatsApp history to Firestore:", e.message);
+      console.error(`Error saving WhatsApp history to Firestore for ${cleanNumber}:`, e.message);
     }
   }
-  inMemoryHistoryCache[fromNumber] = sliced;
+  try {
+    ensureConfigDir();
+    const historyFilePath = import_path.default.join(configDir, `history_${cleanNumber}.json`);
+    import_fs.default.writeFileSync(historyFilePath, JSON.stringify({ messages: sliced }, null, 2), "utf8");
+  } catch (fileErr) {
+    console.error(`Error writing local backup history file for ${cleanNumber}:`, fileErr.message);
+  }
+  inMemoryHistoryCache[cleanNumber] = sliced;
 }
 async function startServer() {
   const app = (0, import_express.default)();
@@ -816,9 +453,22 @@ async function startServer() {
     return { isOpen, statusMessage };
   };
   const buildSystemInstruction = (config) => {
-    const { name, category, address, phone, businessHours, specialOffers, tone, faqs } = config;
+    const { name, category, address, phone, businessHours, specialOffers, tone, faqs, pricingTable } = config;
     let faqText = faqs && faqs.length > 0 ? faqs.map((f) => `P: ${f.question}
 R: ${f.answer}`).join("\n\n") : "Nenhuma cadastrada.";
+    let pricingText = pricingTable && pricingTable.length > 0 ? pricingTable.map((p) => `- Aparelho/Modelo: ${p.deviceModel} | Servi\xE7o: ${p.serviceName} | Estimativa de Pre\xE7o: ${p.priceEstimate}${p.notes ? ` (Notas: ${p.notes})` : ""}`).join("\n") : `Tabela de Pre\xE7os Geral de Refer\xEAncia:
+- Aparelho/Modelo: iPhone 11 | Servi\xE7o: Troca de Tela Premium (OLED) | Estimativa de Pre\xE7o: A partir de R$ 320 (Notas: Tela qualidade premium com True Tone ativo naturalmente.)
+- Aparelho/Modelo: iPhone 11 | Servi\xE7o: Troca de Bateria Premium | Estimativa de Pre\xE7o: A partir de R$ 180 (Notas: Excelente durabilidade, similar \xE0 original de f\xE1brica.)
+- Aparelho/Modelo: iPhone 12 | Servi\xE7o: Troca de Tela Premium (OLED) | Estimativa de Pre\xE7o: A partir de R$ 550 (Notas: Tela qualidade premium com True Tone ativo.)
+- Aparelho/Modelo: iPhone 12 | Servi\xE7o: Troca de Bateria Premium | Estimativa de Pre\xE7o: A partir de R$ 260 (Notas: Excelente durabilidade, similar \xE0 original de f\xE1brica.)
+- Aparelho/Modelo: iPhone 13 | Servi\xE7o: Troca de Tela Premium (OLED) | Estimativa de Pre\xE7o: A partir de R$ 850 (Notas: Tela premium, cores e toque perfeitos.)
+- Aparelho/Modelo: iPhone 13 | Servi\xE7o: Troca de Bateria Premium | Estimativa de Pre\xE7o: A partir de R$ 350 (Notas: Excelente durabilidade, similar \xE0 original de f\xE1brica.)
+- Aparelho/Modelo: Samsung Linha S (S20/S21) | Servi\xE7o: Troca de Tela Premium | Estimativa de Pre\xE7o: A partir de R$ 650 (Notas: Qualidade premium com alta defini\xE7\xE3o de toque.)
+- Aparelho/Modelo: Notebooks (Dell, Lenovo, HP, etc) | Servi\xE7o: Instala\xE7\xE3o de SSD 240GB + Limpeza Interna + Formata\xE7\xE3o | Estimativa de Pre\xE7o: A partir de R$ 220 (Notas: Garante at\xE9 10x mais velocidade de inicializa\xE7\xE3o.)
+- Aparelho/Modelo: Notebooks (Dell, Lenovo, HP, etc) | Servi\xE7o: Instala\xE7\xE3o de SSD 480GB + Limpeza Interna + Formata\xE7\xE3o | Estimativa de Pre\xE7o: A partir de R$ 290 (Notas: Garante at\xE9 10x mais velocidade de inicializa\xE7\xE3o e muito mais espa\xE7o.)
+- Aparelho/Modelo: Notebooks (Qualquer marca) | Servi\xE7o: Limpeza F\xEDsica Interna + Troca de Pasta T\xE9rmica Prata | Estimativa de Pre\xE7o: R$ 100 (Notas: Essencial para evitar lentid\xE3o e desligamento por superaquecimento.)
+- Aparelho/Modelo: iPhone (Qualquer modelo) | Servi\xE7o: Servi\xE7o Adicional de Transplante (EEPROM ou BMS) | Estimativa de Pre\xE7o: R$ 150 adicionais (Notas: Procedimento de micro-solda opcional para remover a mensagem de pe\xE7a desconhecida.)
+- Aparelho/Modelo: Celulares (Geral) | Servi\xE7o: Desoxida\xE7\xE3o Qu\xEDmica Profissional (Aparelhos molhados) | Estimativa de Pre\xE7o: A partir de R$ 120 (Notas: Processo de lavagem qu\xEDmica em cuba ultrass\xF4nica para remover oxida\xE7\xF5es.)`;
     const brazilTime = getBrazilDateTime();
     const brazilStatus = getBrazilStatus();
     return `Voc\xEA \xE9 o assistente inteligente de intelig\xEAncia artificial da empresa "${name}".
@@ -857,7 +507,7 @@ REGRAS DE CONVERSA\xC7\xC3O (MUITO IMPORTANTES):
 - Garantia de Qualidade Premium: Fa\xE7a quest\xE3o de enfatizar que todas as nossas telas e baterias utilizadas s\xE3o de alt\xEDssima qualidade Premium. N\xF3s somos uma empresa s\xE9ria e consolidada na regi\xE3o, por isso oferecemos total seguran\xE7a e garantias estendidas reais de 90 dias (3 meses), 180 dias (6 meses) ou at\xE9 360 dias (12 meses) dependendo da pe\xE7a selecionada pelo cliente. Garantia e zelo de verdade!
 - Estrat\xE9gia de Pre\xE7os e Visita F\xEDsica (Crucial para Convers\xE3o): Quando o cliente perguntar sobre valores ou or\xE7amentos, utilize sempre a nossa estrat\xE9gia h\xEDbrida de vendas no WhatsApp:
   1. Gere valor primeiro: Destaque com entusiasmo a qualidade superior (Premium) da pe\xE7a, o alto zelo t\xE9cnico da nossa equipe especializada e a nossa garantia estendida de verdade.
-  2. Informe a estimativa ou faixa de pre\xE7o de forma transparente (ex: 'A troca de tela premium para esse modelo de iPhone fica a partir de R$ 380, dependendo da marca final selecionada').
+  2. Se o cliente insistir ou se for muito importante passar o valor, informe a estimativa ou faixa de pre\xE7o de forma transparente com base na Tabela de Pre\xE7os abaixo.
   3. Logo em seguida, explique que o diagn\xF3stico completo e o or\xE7amento definitivo s\xE3o realizados presencialmente no nosso laborat\xF3rio de forma 100% gratuita e sem nenhum compromisso.
   4. Conduza ativamente para a loja f\xEDsica: Convide e incentive o cliente de forma acolhedora a trazer o aparelho para avalia\xE7\xE3o ou a agendar um hor\xE1rio direto ('Gostaria de agendar um hor\xE1rio hoje ou prefere dar uma passada aqui \xE0 tarde para nosso t\xE9cnico avaliar gratuitamente para voc\xEA?'). As empresas s\xE9rias e de sucesso no mercado premium sempre priorizam construir essa rela\xE7\xE3o de confian\xE7a e atrair o cliente para o ambiente f\xEDsico da loja, onde a convers\xE3o do servi\xE7o \xE9 garantida!
 - Limite de Vidros e Placas de PC: Se perguntarem especificamente sobre "troca de vidro" de tela ou "reparo de placa de notebook/computador", decline polidamente explicando que trabalhamos apenas com a substitui\xE7\xE3o do m\xF3dulo completo de tela (mencionando que estamos trazendo o maquin\xE1rio de vidro em breve) e que nossos reparos avan\xE7ados de placas l\xF3gicas por micro-soldagem s\xE3o focados exclusivamente na linha de smartphones (iPhone e Android).
@@ -871,27 +521,28 @@ Data e Hora Atual de Atendimento (Fuso Hor\xE1rio de Caruaru/PE, Brasil):
 Base de Conhecimento (Perguntas Frequentes / FAQs):
 ${faqText}
 
+Tabela de Pre\xE7os Geral de Refer\xEAncia para Or\xE7amentos (S\xD3 passe o valor se o cliente insistir ou pedir or\xE7amento espec\xEDfico, priorizando sempre a visita f\xEDsica logo em seguida):
+${pricingText}
+
 Diretrizes de Conversa\xE7\xE3o (MUITO IMPORTANTE):
 1. Estilo Bate-Papo de WhatsApp: Fale de forma extremamente curta, fluida e natural, como um ser humano conversando de verdade. Evite respostas longas, explica\xE7\xF5es gigantescas ou apresenta\xE7\xF5es corporativas formais de uma s\xF3 vez.
 2. Tamanho M\xE1ximo de Resposta: Cada mensagem enviada deve conter no m\xE1ximo 1 ou 2 par\xE1grafos curtos (e cada par\xE1grafo com apenas 1 a 2 linhas curtas). Seja o mais breve e sucinto poss\xEDvel!
 3. Uma Coisa de Cada Vez: N\xE3o jogue toda a informa\xE7\xE3o ou todas as FAQs de uma vez. V\xE1 conduzindo a conversa aos poucos. Fa\xE7a perguntas para entender a real necessidade do cliente antes de explicar tudo.
-4. Mem\xF3ria Recente: Preste muita aten\xE7\xE3o ao hist\xF3rico de mensagens anteriores. Se o cliente acabou de dizer o nome do aparelho, qual o problema ou o que ele deseja, d\xEA continuidade e jamais repita a mesma pergunta ou pe\xE7a para ele dizer novamente.
-5. N\xE3o invente dados do aparelho: Se o cliente fornecer apenas a marca ou uma informa\xE7\xE3o incompleta do aparelho, nunca complete o modelo sozinho. Fa\xE7a uma pergunta curta de confirma\xE7\xE3o, como: "Perfeito, j\xE1 entendi a marca. Me diga o modelo completo do aparelho, por exemplo Xiaomi Note 12 4G.".
-6. Se o cliente disser que n\xE3o sabe o modelo, n\xE3o tente fechar a venda nem presumir o aparelho. Mantenha a conversa objetiva, pe\xE7a o modelo ou ofere\xE7a outra forma de identificar o equipamento, como uma foto ou uma descri\xE7\xE3o breve.
-7. Limite de Emojis: Use no m\xE1ximo 1 ou 2 emojis por mensagem para manter a conversa amig\xE1vel mas profissional.
-8. Gerenciamento do Hor\xE1rio de Atendimento (MUITO CR\xCDTICO):
+4. Mem\xF3ria Recente: Preste muita aten\xE7\xE3o ao hist\xF3rico de mensagens anteriores. Se o cliente acabou de dizer o nome do aparelho, qual o problema ou o que ele deseja, deu continuidade e jamais repita a mesma pergunta ou pe\xE7a para ele dizer novamente.
+5. Limite de Emojis: Use no m\xE1ximo 1 ou 2 emojis por mensagem para manter a conversa amig\xE1vel mas profissional.
+6. Gerenciamento do Hor\xE1rio de Atendimento (MUITO CR\xCDTICO):
    O status atual de funcionamento da loja f\xEDsica \xE9: ${brazilStatus.statusMessage}.
    - Se o status indicar que a loja est\xE1 "FECHADA" (ou seja, hoje \xE9 Domingo, S\xE1bado fora do hor\xE1rio, ou dias de semana \xE0 noite/almo\xE7o):
      * Voc\xEA DEVE ser 100% transparente com o cliente. Logo nas primeiras mensagens, deixe absolutamente claro que a loja f\xEDsica est\xE1 FECHADA no momento ou que estamos fora do hor\xE1rio de expediente comercial.
      * Diga explicitamente algo amig\xE1vel como: "Ol\xE1! No momento nossa loja f\xEDsica est\xE1 fechada/fora do hor\xE1rio de atendimento, mas eu sou o assistente virtual da AndMicrocell e posso ir registrando todos os detalhes do seu aparelho para adiantar seu atendimento!"
      * Comunique com total clareza que, mesmo fora do hor\xE1rio de funcionamento comercial, voc\xEA est\xE1 ativo para dar andamento na conversa, coletar as informa\xE7\xF5es do aparelho e do problema t\xE9cnico para deixar tudo pronto no sistema.
      * Explique que assim que a equipe t\xE9cnica retornar no primeiro hor\xE1rio \xFAtil, eles analisar\xE3o tudo para resolver, ou que voc\xEA ir\xE1 verificar com a equipe a possibilidade de um t\xE9cnico de plant\xE3o prestar um suporte especial emergencial.
-     * NUNCA d\xEA a entender que o atendimento presencial ou final est\xE1 ativo agora se estiver FECHADA. Deixe bem n\xEDtido que a loja est\xE1 fechada, mas que o assistente virtual (voc\xEA) resolve tudo por aqui e deixa engatilhado para os t\xE9cnicos.
-   - Se o status indicar que a loja est\xE1 "ABERTA":
-     * Siga com o atendimento normal de expediente comercial.
-9. Honestidade e Seguran\xE7a: NUNCA invente informa\xE7\xF5es sobre pre\xE7os, servi\xE7os ou pol\xEDticas que n\xE3o estejam descritas acima. Se n\xE3o souber a resposta ou se o cliente fizer uma pergunta muito espec\xEDfica fora da base de conhecimento, pe\xE7a educadamente para ele aguardar um momento que um atendente humano ir\xE1 assumir o atendimento para dar todos os detalhes.
-10. Responda sempre em Portugu\xEAs do Brasil.
-11. Encerramento Objetivo da Conversa: Quando o cliente se despedir, agradecer ("Obrigado", "Valeu", "Tudo certo", "Entendido", "Tchau", "Boa noite", etc.) ou der sinais claros de que a d\xFAvida foi resolvida e o atendimento se encerrou, responda de forma final, extremamente direta, amig\xE1vel e objetiva. NUNCA fa\xE7a novas perguntas redundantes ("Posso ajudar em algo mais?") ou tente prolongar a conversa desnecessariamente. Apenas agrade\xE7a, deseje um excelente dia/noite ou agende um hor\xE1rio para ele trazer o aparelho, e encerre por ali.`;
+     * NUNCA deu a entender que o atendimento presencial ou final est\xE1 ativo agora se estiver FECHADA. Deixe bem n\xEDtido que a loja est\xE1 fechada, mas que o assistente virtual (voc\xEA) resolve tudo por aqui e deixa engatilhado para os t\xE9cnicos.
+    - Se o status indicar que a loja est\xE1 "ABERTA":
+      * Siga com o atendimento normal de expediente comercial.
+7. Honestidade e Seguran\xE7a: NUNCA invente informa\xE7\xF5es sobre pre\xE7os, servi\xE7os ou pol\xEDticas que n\xE3o estejam descritas acima. Se n\xE3o souber a resposta ou se o cliente fizer uma pergunta muito espec\xEDfica de pre\xE7o que n\xE3o conste na tabela de pre\xE7os nem na base de conhecimento, explique de forma amig\xE1vel e profissional que n\xE3o tem o valor exato no sistema e convide-o calorosamente a trazer para uma avalia\xE7\xE3o gratuita na loja ou pe\xE7a para ele aguardar um momento que um atendente humano ir\xE1 assumir o atendimento para dar todos os detalhes.
+8. Responda sempre em Portugu\xEAs do Brasil.
+9. Encerramento Objetivo da Conversa: Quando o cliente se despedir, agradecer ("Obrigado", "Valeu", "Tudo certo", "Entendido", "Tchau", "Boa noite", etc.) ou der sinais claros de que a d\xFAvida foi resolvida e o atendimento se encerrou, responda de forma final, extremamente direta, amig\xE1vel e objetiva. NUNCA fa\xE7a novas perguntas redundantes ("Posso ajudar em algo mais?") ou tente prolongar a conversa desnecessariamente. Apenas agrade\xE7a, deseje um excelente dia/noite ou agende um hor\xE1rio para ele trazer o aparelho, e encerre por ali.`;
   };
   app.post("/api/agent/chat", async (req, res) => {
     try {
@@ -900,13 +551,7 @@ Diretrizes de Conversa\xE7\xE3o (MUITO IMPORTANTE):
         return res.status(400).json({ error: "Configura\xE7\xE3o do agente ausente." });
       }
       const systemPrompt = buildSystemInstruction(config);
-      const latestUserMessage = messages[messages.length - 1]?.text || "";
-      const lowCostReply = getLowCostInstantReply(latestUserMessage, config);
-      if (lowCostReply) {
-        return res.json({ text: sanitizeReplyText(lowCostReply) });
-      }
-      const recentMessages = Array.isArray(messages) ? messages.slice(-AI_CHAT_HISTORY_LIMIT) : [];
-      const contents = recentMessages.map((m) => {
+      const contents = messages.map((m) => {
         return {
           role: m.sender === "customer" ? "user" : "model",
           parts: [{ text: m.text }]
@@ -914,27 +559,38 @@ Diretrizes de Conversa\xE7\xE3o (MUITO IMPORTANTE):
       });
       try {
         const client = getGeminiClient();
-        const { response } = await generateContentWithModelFallback(
-          client,
-          AI_MODEL_CHAT,
+        const response = await client.models.generateContent({
+          model: "gemini-2.5-flash",
           contents,
-          {
+          config: {
             systemInstruction: systemPrompt,
-            temperature: 0.55,
-            maxOutputTokens: AI_CHAT_MAX_OUTPUT_TOKENS
+            temperature: 0.7
           }
-        );
-        const replyText = finalizeReplyText(
-          response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?",
-          latestUserMessage,
-          config
-        );
+        });
+        const replyText = response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?";
         return res.json({ text: replyText });
       } catch (geminiError) {
-        console.warn("Gemini unavailable (/api/agent/chat):", geminiError.message);
-        return res.status(503).json({
-          error: "IA temporariamente indispon\xEDvel. Tente novamente em instantes.",
-          code: "GEMINI_UNAVAILABLE"
+        console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
+        const lastUserMessage = messages[messages.length - 1]?.text?.toLowerCase() || "";
+        let fallbackResponse = `Ol\xE1! Sou o assistente virtual da ${config.name}. Como posso ajudar?`;
+        if (lastUserMessage.includes("horario") || lastUserMessage.includes("hor\xE1rio") || lastUserMessage.includes("abre") || lastUserMessage.includes("fecha")) {
+          fallbackResponse = `Nosso hor\xE1rio de funcionamento \xE9: ${config.businessHours || "de segunda a sexta, das 9h \xE0s 18h"}. Ficamos muito felizes com o seu interesse!`;
+        } else if (lastUserMessage.includes("endereco") || lastUserMessage.includes("endere\xE7o") || lastUserMessage.includes("onde") || lastUserMessage.includes("localizacao") || lastUserMessage.includes("localiza\xE7\xE3o")) {
+          fallbackResponse = config.address ? `N\xF3s estamos localizados em: ${config.address}. Venha nos visitar!` : `N\xF3s atuamos principalmente de forma digital ou com entregas diretas!`;
+        } else if (lastUserMessage.includes("preco") || lastUserMessage.includes("pre\xE7o") || lastUserMessage.includes("quanto") || lastUserMessage.includes("valor")) {
+          fallbackResponse = `Para valores e or\xE7amentos detalhados do nosso segmento de ${config.category}, fale com nossos especialistas! O que exatamente voc\xEA procura?`;
+        } else if (config.faqs && config.faqs.length > 0) {
+          const matchedFaq = config.faqs.find(
+            (f) => lastUserMessage.includes(f.question.toLowerCase()) || f.question.toLowerCase().split(" ").some((word) => word.length > 4 && lastUserMessage.includes(word))
+          );
+          if (matchedFaq) {
+            fallbackResponse = matchedFaq.answer;
+          }
+        }
+        return res.json({
+          text: fallbackResponse,
+          isSimulatedFallback: true,
+          apiKeyNotice: "Configure a GEMINI_API_KEY no painel Secrets do AI Studio para obter respostas din\xE2micas em tempo real com IA!"
         });
       }
     } catch (err) {
@@ -961,25 +617,30 @@ Instru\xE7\xF5es importantes:
 5. N\xE3o utilize formata\xE7\xE3o complexa (como negritos em markdown), responda como uma mensagem direta de texto profissional e acolhedora.`;
       try {
         const client = getGeminiClient();
-        const { response } = await generateContentWithModelFallback(
-          client,
-          AI_MODEL_REVIEW,
-          `Cliente: ${authorName}
+        const response = await client.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: `Cliente: ${authorName}
 Nota: ${rating} estrelas
 Coment\xE1rio: "${comment || "Sem coment\xE1rio escrito, apenas atribuiu estrelas"}"`,
-          {
+          config: {
             systemInstruction,
-            temperature: 0.5,
-            maxOutputTokens: AI_REVIEW_MAX_OUTPUT_TOKENS
+            temperature: 0.8
           }
-        );
+        });
         const replyText = response.text || `Muito obrigado pela sua avalia\xE7\xE3o, ${authorName}! Ficamos felizes em te atender.`;
         return res.json({ reply: replyText });
       } catch (geminiError) {
-        console.warn("Gemini unavailable (/api/agent/review-reply):", geminiError.message);
-        return res.status(503).json({
-          error: "IA temporariamente indispon\xEDvel. Tente novamente em instantes.",
-          code: "GEMINI_UNAVAILABLE"
+        console.warn("Using fallback response for review reply:", geminiError.message);
+        let replyText = `Muito obrigado pela sua avalia\xE7\xE3o de ${rating} estrelas, ${authorName}! Ficamos muito gratos pelo feedback e trabalhamos constantemente para oferecer o melhor em ${config.category}.`;
+        if (rating <= 2) {
+          replyText = `Ol\xE1, ${authorName}. Lamentamos muito que sua experi\xEAncia n\xE3o tenha sido ideal. Valorizamos muito o seu feedback e gostar\xEDamos de entender melhor o ocorrido. Por favor, entre em contato conosco pelo telefone ${config.phone} para que possamos resolver a situa\xE7\xE3o diretamente.`;
+        } else if (rating === 3) {
+          replyText = `Ol\xE1, ${authorName}. Agradecemos por sua avalia\xE7\xE3o e pelo feedback construtivo. Estamos sempre buscando evoluir em nossos servi\xE7os de ${config.category} para oferecer uma experi\xEAncia 5 estrelas na sua pr\xF3xima visita!`;
+        }
+        return res.json({
+          reply: replyText,
+          isSimulatedFallback: true,
+          apiKeyNotice: "Configure a GEMINI_API_KEY no painel Secrets do AI Studio para obter respostas personalizadas autom\xE1ticas!"
         });
       }
     } catch (err) {
@@ -1230,15 +891,14 @@ IMPORTANTE: Retorne APENAS o objeto JSON v\xE1lido, sem cercas de c\xF3digo (mar
 Categoria sugerida: "${category}"` : ""}`;
       try {
         const client = getGeminiClient();
-        const { response } = await generateContentWithModelFallback(
-          client,
-          AI_MODEL_CONTENT,
-          [{ role: "user", parts: [{ text: prompt }] }],
-          {
+        const response = await client.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: {
             systemInstruction,
             temperature: 0.8
           }
-        );
+        });
         let text = response.text || "";
         text = text.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
         const postData = JSON.parse(text);
@@ -1280,11 +940,163 @@ Categoria sugerida: "${category}"` : ""}`;
         postData.coverImage = getRelevantCoverImage(titleVal, categoryVal);
         return res.json({ success: true, post: postData });
       } catch (geminiError) {
-        console.warn("Gemini unavailable (/api/posts/generate):", geminiError.message);
-        return res.status(503).json({
-          success: false,
-          error: "IA temporariamente indispon\xEDvel. Tente novamente em instantes.",
-          code: "GEMINI_UNAVAILABLE"
+        console.warn("Gemini generation failed for post, using smart dynamic backup:", geminiError.message);
+        const normalizedTopic = topic.toLowerCase();
+        let finalTitle = topic;
+        let finalExcerpt = `Confira uma an\xE1lise detalhada sobre "${topic}", preparada para ajudar voc\xEA a cuidar melhor do seu dispositivo.`;
+        let finalCategory = category || "Dicas";
+        let finalContent = "";
+        let finalCoverImage = "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop";
+        if (normalizedTopic.includes("bateria") || normalizedTopic.includes("saude") || normalizedTopic.includes("sa\xFAde") || normalizedTopic.includes("carrega") || normalizedTopic.includes("ciclo")) {
+          finalTitle = topic.length > 15 ? topic : "Guia Completo de Sa\xFAde de Bateria do iPhone";
+          finalExcerpt = "Aprenda pr\xE1ticas reais para otimizar os ciclos de carga e manter a integridade da bateria do seu iPhone por muito mais tempo.";
+          finalCategory = "Dicas";
+          finalCoverImage = "https://images.unsplash.com/photo-1601524909162-be87252be298?w=600&auto=format&fit=crop";
+          finalContent = `### Por que a sa\xFAde da bateria cai?
+
+A bateria do seu iPhone \xE9 baseada na tecnologia de \xEDons de l\xEDtio, o que significa que ela sofre desgaste qu\xEDmico natural ao longo do tempo. No entanto, certos h\xE1bitos di\xE1rios aceleram drasticamente esse processo, reduzindo a vida \xFAtil do componente muito antes do esperado.
+
+### 5 h\xE1bitos reais que danificam a vida \xFAtil da sua bateria
+
+1. **Utilizar carregadores paralelos ou cabos danificados**: Acess\xF3rios sem certifica\xE7\xE3o n\xE3o controlam a oscila\xE7\xE3o da corrente el\xE9trica, causando superaquecimento e degradando as c\xE9lulas qu\xEDmicas da bateria.
+2. **Expor o aparelho a altas temperaturas**: Deixar o celular no painel do carro sob o sol ou us\xE1-lo para jogos pesados enquanto carrega s\xE3o os piores inimigos da bateria. O calor extremo acelera o desgaste qu\xEDmico de forma irrevers\xEDvel.
+3. **Deixar a bateria zerar completamente**: Deixar o iPhone descarregar at\xE9 0% gera um estresse desnecess\xE1rio nas c\xE9lulas de carga. O ideal \xE9 manter o n\xEDvel sempre entre **20% e 80%**.
+4. **Carregar o celular com capas muito espessas**: Capinhas pesadas ret\xEAm o calor produzido durante a recarga. Se notar que o celular esquenta muito enquanto carrega, remova a capa.
+5. **Ciclos de carga mal aproveitados**: Tente evitar cargas curtas e repetitivas se o aparelho estiver quente. Aproveite recursos como o *Carregamento Otimizado* do pr\xF3prio iOS.
+
+### Quando \xE9 a hora de fazer a troca?
+
+Geralmente, quando a capacidade m\xE1xima de sa\xFAde da bateria no iOS fica abaixo de **80%**, ou quando o aparelho come\xE7a a desligar sozinho e apresentar lentid\xE3o severa. 
+
+### Conte com a ${companyName}!
+
+Se a sua bateria j\xE1 est\xE1 desgastada e durando pouco, n\xF3s fazemos a substitui\xE7\xE3o r\xE1pida por componentes de alt\xEDssima qualidade homologados, preservando o desempenho original do seu iPhone. Traga o seu dispositivo para um diagn\xF3stico e or\xE7amento 100% gratuito e r\xE1pido em nossa loja!`;
+        } else if (normalizedTopic.includes("placa") || normalizedTopic.includes("curto") || normalizedTopic.includes("solda") || normalizedTopic.includes("micro-solda") || normalizedTopic.includes("reparo")) {
+          finalTitle = topic.length > 15 ? topic : "Recupera\xE7\xE3o Avan\xE7ada: Como funciona o reparo de placa de iPhone";
+          finalExcerpt = "Descubra como a engenharia eletr\xF4nica e a micro-soldagem especializada salvam celulares dados como 'sem conserto'.";
+          finalCategory = "Manuten\xE7\xE3o";
+          finalCoverImage = "https://images.unsplash.com/photo-1597733336794-12d05021d510?w=600&auto=format&fit=crop";
+          finalContent = `### O Cora\xE7\xE3o do seu iPhone: A Placa L\xF3gica
+
+A placa l\xF3gica do iPhone \xE9 um circuito de alt\xEDssima densidade, onde centenas de microcomponentes (capacitores, resistores, circuitos integrados) trabalham juntos em um espa\xE7o menor do que um cart\xE3o de cr\xE9dito. Qualquer falha em uma \xFAnica trilha pode apagar o celular por completo.
+
+### Sintomas comuns de falhas na placa
+
+- O iPhone n\xE3o liga e n\xE3o d\xE1 sinais de carregamento, mesmo com tela e bateria novas.
+- Consumo excessivo de bateria ou aquecimento extremo repentino nas costas do aparelho.
+- Falhas intermitentes de fun\xE7\xF5es como Wi-Fi, sinal de operadora (baseband) ou \xE1udio (codec).
+- Reinicializa\xE7\xF5es constantes na logo da Apple (conhecido como loop infinito).
+
+### O Processo de Micro-soldagem de Alta Precis\xE3o
+
+Diferente de assist\xEAncias comuns que apenas trocam pe\xE7as modulares, a **${companyName}** trabalha com microeletr\xF4nica avan\xE7ada. 
+Utilizando microsc\xF3pios de alta defini\xE7\xE3o, esta\xE7\xF5es de retrabalho de ar quente e esquemas el\xE9tricos digitais detalhados, nossa equipe consegue rastrear curtos-circuitos em malhas principais e substituir microcomponentes milim\xE9tricos com precis\xE3o cir\xFArgica.
+
+### Vale a pena reparar a placa?
+
+Com certeza! Na imensa maioria das vezes, o reparo da placa l\xF3gica custa uma fra\xE7\xE3o do valor de um aparelho novo, al\xE9m de recuperar todos os seus dados e fotos pessoais importantes que n\xE3o estavam salvos no iCloud.
+
+### Confie em quem entende de verdade!
+
+Nossa equipe possui certifica\xE7\xF5es avan\xE7adas em microrreparos de placas. Se disseram que seu iPhone n\xE3o tem conserto, traga-o para a **${companyName}**. N\xF3s faremos uma an\xE1lise t\xE9cnica minuciosa e honesta de forma 100% gratuita!`;
+        } else if (normalizedTopic.includes("\xE1gua") || normalizedTopic.includes("liquido") || normalizedTopic.includes("l\xEDquido") || normalizedTopic.includes("arroz") || normalizedTopic.includes("molhado")) {
+          finalTitle = topic.length > 15 ? topic : "Celular Caiu na \xC1gua? O Guia de Sobreviv\xEAncia Definitivo";
+          finalExcerpt = "Entenda quais atitudes tomar imediatamente e por que colocar o aparelho no pote de arroz pode destruir seus componentes internos.";
+          finalCategory = "Guias";
+          finalCoverImage = "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=600&auto=format&fit=crop";
+          finalContent = `### O desespero do acidente com \xE1gua
+
+Deixar o celular cair na piscina, na pia ou at\xE9 mesmo no banheiro \xE9 um dos acidentes mais comuns. Embora muitos smartphones modernos possuam certifica\xE7\xE3o de resist\xEAncia IP68, essa prote\xE7\xE3o se desgasta com o tempo e com impactos, permitindo a entrada de umidade.
+
+### O Grande Perigo do Mito do Arroz
+
+Colocar o celular no arroz **N\xC3O** funciona e pode danificar ainda mais o seu celular. Embora o arroz absorva umidade superficial, ele libera um amido em p\xF3 extremamente fino que entra nos conectores, alto-falantes e c\xE2mera do aparelho. Ao entrar em contato com a \xE1gua interna, esse p\xF3 vira uma pasta condutiva e corrosiva, acelerando o curto-circuito e destruindo trilhas de solda essenciais na placa.
+
+### Passo a passo para salvar seu dispositivo imediatamente
+
+1. **Desligue o aparelho na mesma hora**: Se o celular continuar ligado, a eletricidade em contato com a \xE1gua criar\xE1 eletr\xF3lise instant\xE2nea, corroendo componentes em minutos.
+2. **Remova a gaveta do chip SIM**: Isso cria uma abertura adicional para ajudar na circula\xE7\xE3o de ar.
+3. **Seque apenas por fora**: Use uma toalha macia ou papel absorvente. **NUNCA** use secador de cabelo quente, pois ele empurra a \xE1gua ainda mais para dentro e pode derreter veda\xE7\xF5es e componentes pl\xE1sticos.
+4. **N\xE3o carregue o celular**: Ligar o carregador em um dispositivo molhado \xE9 garantia de queimar circuitos cr\xEDticos irreversivelmente.
+
+### O Processo Profissional de Desoxida\xE7\xE3o
+
+O \xFAnico m\xE9todo real e seguro \xE9 levar o aparelho o quanto antes a uma assist\xEAncia que realize a abertura total e fa\xE7a uma **desoxida\xE7\xE3o qu\xEDmica profissional** utilizando banheira de ultrassom e \xE1lcool isoprop\xEDlico de alta pureza.
+
+### Traga correndo para a ${companyName}!
+
+Tempo \xE9 precioso nesses casos! Traga o seu iPhone imediatamente para a nossa assist\xEAncia. N\xF3s abriremos o seu aparelho na hora, desconectaremos a bateria para cessar a energia e realizaremos o procedimento de limpeza qu\xEDmica completo para salvar o seu smartphone!`;
+        } else if (normalizedTopic.includes("tela") || normalizedTopic.includes("vidro") || normalizedTopic.includes("trincado") || normalizedTopic.includes("display")) {
+          finalTitle = topic.length > 15 ? topic : "Tela Quebrada do iPhone: Trocar o vidro ou o display completo?";
+          finalExcerpt = "Esclarecemos a diferen\xE7a crucial entre a troca apenas do vidro e a troca do display inteiro para voc\xEA economizar sem perder a qualidade original.";
+          finalCategory = "Guias";
+          finalCoverImage = "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop";
+          finalContent = `### A tela trincou, e agora?
+
+Deixar o iPhone cair e ver a tela rachada \xE9 uma das piores sensa\xE7\xF5es para qualquer usu\xE1rio. No entanto, o mercado oferece diferentes formas de reparo, e compreender como a tela \xE9 constru\xEDda pode fazer voc\xEA economizar bastante dinheiro mantendo as caracter\xEDsticas originais do seu display.
+
+### A Estrutura de uma Tela Moderna
+
+As telas de smartphones s\xE3o formadas por camadas principais integradas:
+1. **O Vidro Externo**: A camada de prote\xE7\xE3o f\xEDsica que tocamos.
+2. **O Painel Touch (Sensibilidade)**: Detecta os toques dos dedos.
+3. **O Display (OLED ou LCD)**: Respons\xE1vel por gerar as cores, brilho e a imagem em si.
+
+### Trocar apenas o Vidro ou a Tela Completa?
+
+- **Quando trocar APENAS o vidro**: Se o seu iPhone quebrou o vidro externo, mas a imagem continua perfeitamente limpa (sem manchas pretas, linhas coloridas ou listras) e o toque (touchscreen) funciona em toda a superf\xEDcie de forma fluida. Nesse cen\xE1rio, o processo de lamina\xE7\xE3o profissional substitui apenas o vidro quebrado, mantendo o seu painel LCD/OLED original e economizando at\xE9 **60%** do custo de uma tela nova!
+- **Quando trocar o Display Completo**: Se a tela est\xE1 preta, apresenta manchas escuras, vazamento de cristal l\xEDquido, listras verticais verdes/rosas ou se o toque parou de responder completamente. Nesse caso, a substitui\xE7\xE3o da pe\xE7a inteira \xE9 obrigat\xF3ria.
+
+### Riscos de Telas Paralelas de Baixa Qualidade
+
+Telas de qualidade inferior (paralelas/incell de baixo custo) apresentam cores lavadas, brilho fraco, consomem mais bateria do celular e quebram com extrema facilidade ao menor impacto. Na **${companyName}**, priorizamos telas de qualidade premium com garantia estendida, calibra\xE7\xE3o correta de cores e manuten\xE7\xE3o do recurso True Tone.
+
+### Fa\xE7a seu or\xE7amento gratuito na ${companyName}!
+
+Nossos laborat\xF3rios contam com m\xE1quinas de lamina\xE7\xE3o a v\xE1cuo de alta tecnologia para restaurar apenas o vidro do seu iPhone com acabamento de f\xE1brica. Economize com intelig\xEAncia! Venha fazer uma avalia\xE7\xE3o gratuita do seu display hoje mesmo com a nossa equipe!`;
+        } else {
+          finalTitle = topic;
+          finalExcerpt = `Entenda as melhores pr\xE1ticas, cuidados e recomenda\xE7\xF5es t\xE9cnicas para tratar o tema "${topic}" com seguran\xE7a no seu dispositivo.`;
+          finalContent = `### Compreendendo mais sobre: ${topic}
+
+Muitas vezes, nos deparamos com desafios relacionados a **${topic}** no dia a dia do uso de aparelhos de alta tecnologia como iPhones, smartphones e notebooks. Para garantir a longevidade, o bom desempenho e a seguran\xE7a dos seus dados, \xE9 essencial compreender os aspectos t\xE9cnicos envolvidos.
+
+### Pontos Fundamentais de Aten\xE7\xE3o
+
+Para evitar dores de cabe\xE7a e gastos desnecess\xE1rios com manuten\xE7\xE3o corretiva, siga estas orienta\xE7\xF5es gerais de engenharia e cuidado preventivo:
+
+- **Manuten\xE7\xE3o Preventiva**: A limpeza f\xEDsica adequada dos conectores de carga, sa\xEDdas de som e desoxida\xE7\xE3o preventiva salvam componentes internos de desgaste prematuro.
+- **Uso de Acess\xF3rios Homologados**: Sempre invista em cabos, carregadores e adaptadores de marcas renomadas e certificadas. A qualidade da energia fornecida influencia diretamente o funcionamento correto da placa principal e a sa\xFAde t\xE9rmica dos chips.
+- **Evitar Solu\xE7\xF5es Caseiras Extremas**: Ao notar qualquer comportamento estranho no funcionamento, evite tutoriais m\xE1gicos da internet que envolvam calor excessivo ou produtos qu\xEDmicos corrosivos.
+
+### Diagn\xF3stico T\xE9cnico Seguro
+
+Dispositivos modernos possuem designs extremamente compactos e integrados de microeletr\xF4nica. Qualquer tentativa de abertura sem o ferramental adequado (como chaves de precis\xE3o, mantas t\xE9rmicas controladas e pulseiras antiest\xE1ticas) pode causar danos severos irrevers\xEDveis na placa l\xF3gica ou rompimento de cabos flex\xEDveis delicados.
+
+### Traga seu dispositivo para a ${companyName}!
+
+Seja qual for a necessidade de reparo, manuten\xE7\xE3o ou d\xFAvida t\xE9cnica sobre **${topic}**, a equipe altamente qualificada da **${companyName}** est\xE1 pronta para ajudar. N\xF3s realizamos a an\xE1lise detalhada e emitimos o diagn\xF3stico t\xE9cnico com or\xE7amento 100% gratuito. 
+
+Clique no bot\xE3o de atendimento do nosso site para iniciar uma conversa direto pelo WhatsApp com o nosso time especializado!`;
+        }
+        const slug = topic.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-");
+        const postData = {
+          id: `post-${Date.now()}`,
+          title: finalTitle,
+          slug,
+          excerpt: finalExcerpt,
+          content: finalContent,
+          category: finalCategory,
+          publishedAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+          views: 0,
+          readTime: `${Math.max(2, Math.ceil(finalContent.split(/\s+/).length / 200))} min`,
+          coverImage: finalCoverImage
+        };
+        return res.json({
+          success: true,
+          post: postData,
+          isSimulatedFallback: true,
+          apiKeyNotice: `Rascunho contextual gerado devido a limite tempor\xE1rio de quota do Gemini (${geminiError.message}). Configure sua GEMINI_API_KEY no painel Secrets do AI Studio para habilitar a reda\xE7\xE3o profunda sem limites!`
         });
       }
     } catch (err) {
@@ -1316,15 +1128,14 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
       const prompt = `Filtro de categoria solicitado: "${targetCategory}". Por favor, sugira 5 temas excelentes e atuais para o blog da ${companyName}.`;
       try {
         const client = getGeminiClient();
-        const { response } = await generateContentWithModelFallback(
-          client,
-          AI_MODEL_CONTENT,
-          [{ role: "user", parts: [{ text: prompt }] }],
-          {
+        const response = await client.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: {
             systemInstruction,
             temperature: 0.8
           }
-        );
+        });
         let text = response.text || "";
         text = text.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
         const ideas = JSON.parse(text);
@@ -1333,12 +1144,50 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
         }
         throw new Error("Invalid output format from Gemini");
       } catch (geminiError) {
-        console.warn("Gemini unavailable (/api/posts/ideas):", geminiError.message);
-        return res.status(503).json({
-          success: false,
-          error: "IA temporariamente indispon\xEDvel. Tente novamente em instantes.",
-          code: "GEMINI_UNAVAILABLE"
-        });
+        console.warn("Gemini generation failed for ideas, using curated backups:", geminiError.message);
+        const backupData = {
+          "Dicas": [
+            { title: "Por que a sa\xFAde da bateria do seu iPhone cai r\xE1pido? 5 h\xE1bitos reais que danificam a vida \xFAtil", category: "Dicas", source: "Google Trends", icon: "\u{1F50B}" },
+            { title: "Como liberar muito espa\xE7o no celular sem apagar suas fotos preciosas", category: "Dicas", source: "TechTudo Dicas", icon: "\u{1F4BE}" },
+            { title: "O perigo de carregar o celular debaixo do travesseiro: Riscos reais e mitos", category: "Dicas", source: "Dica De Olho", icon: "\u{1F525}" },
+            { title: "Sinais secretos de que seu smartphone tem um v\xEDrus ou app malicioso", category: "Dicas", source: "Tend\xEAncia Tech", icon: "\u{1F6E1}\uFE0F" },
+            { title: "Cuidado com o \xE1lcool em gel! O produto correto para desinfetar o seu visor", category: "Dicas", source: "Alerta Nacional", icon: "\u{1F9FC}" }
+          ],
+          "Guias": [
+            { title: "Celular caiu na \xE1gua? Erros fatais que voc\xEA deve evitar em casa (e o mito do arroz)", category: "Guias", source: "TechTudo Alerta", icon: "\u{1F4A7}" },
+            { title: "Guia Definitivo: Como transferir todos os dados de um celular antigo para o novo sem perder nada", category: "Guias", source: "Manual Pr\xE1tico", icon: "\u{1F4F2}" },
+            { title: "Tela travada ou preta? Como for\xE7ar a reinicializa\xE7\xE3o em qualquer smartphone", category: "Guias", source: "Guia R\xE1pido", icon: "\u2699\uFE0F" },
+            { title: "Como configurar o backup autom\xE1tico e nunca mais perder seus arquivos e fotos", category: "Guias", source: "Foco Pr\xE1tico", icon: "\u2601\uFE0F" },
+            { title: "O que fazer quando o celular n\xE3o quer carregar? Guia b\xE1sico de auto-socorro", category: "Guias", source: "Suporte F\xE1cil", icon: "\u{1F50C}" }
+          ],
+          "Manuten\xE7\xE3o": [
+            { title: "Reparo de placa de iPhone vs Comprar um aparelho novo: Quando realmente vale a pena?", category: "Manuten\xE7\xE3o", source: "Dica De Olho", icon: "\u{1F52C}" },
+            { title: "Curto-circuito na placa do iPhone: Como a micro-soldagem avan\xE7ada recupera o seu aparelho", category: "Manuten\xE7\xE3o", source: "Foco T\xE9cnico", icon: "\u26A1" },
+            { title: "Por que o conector de carga fica folgado? Como a limpeza t\xE9cnica resolve na hora", category: "Manuten\xE7\xE3o", source: "Dica de Bancada", icon: "\u{1F6E0}\uFE0F" },
+            { title: "Os perigos invis\xEDveis de usar uma tela paralela de m\xE1 qualidade no seu smartphone", category: "Manuten\xE7\xE3o", source: "Alerta T\xE9cnico", icon: "\u{1F4F1}" },
+            { title: "Sinais claros de que a bateria do seu celular est\xE1 estufada (e o risco de explos\xE3o)", category: "Manuten\xE7\xE3o", source: "Preven\xE7\xE3o T\xE9cnica", icon: "\u26A0\uFE0F" }
+          ],
+          "Novidades": [
+            { title: "As novas regras de reparabilidade de celulares: O que muda para o consumidor em 2026?", category: "Novidades", source: "Tecnologia Hoje", icon: "\u{1F4E1}" },
+            { title: "Os novos recursos de Intelig\xEAncia Artificial do novo sistema operacional que voc\xEA precisa testar", category: "Novidades", source: "Novidade Mobile", icon: "\u2728" },
+            { title: "Carregamento ultra-r\xE1pido de 120W: Isso realmente vicia ou estraga a vida \xFAtil?", category: "Novidades", source: "Mundo Digital", icon: "\u26A1" },
+            { title: "Telas dobr\xE1veis em 2026: Vale a pena comprar ou o custo de manuten\xE7\xE3o ainda \xE9 alto?", category: "Novidades", source: "Tend\xEAncia Global", icon: "\u{1F4D0}" },
+            { title: "Como a biometria sob a tela funciona e o que fazer se ela parar de responder ap\xF3s trocar o vidro", category: "Novidades", source: "Futuro Tech", icon: "\u261D\uFE0F" }
+          ]
+        };
+        const allBackupIdeas = [
+          ...backupData["Dicas"],
+          ...backupData["Guias"],
+          ...backupData["Manuten\xE7\xE3o"],
+          ...backupData["Novidades"]
+        ];
+        let selectedBackup = allBackupIdeas;
+        if (targetCategory !== "Todas" && backupData[targetCategory]) {
+          selectedBackup = backupData[targetCategory];
+        }
+        const shuffled = [...selectedBackup].sort(() => 0.5 - Math.random());
+        const finalIdeas = shuffled.slice(0, 5);
+        return res.json({ success: true, ideas: finalIdeas });
       }
     } catch (err) {
       console.error(err);
@@ -1357,32 +1206,11 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
   app.get("/api/webhook/logs", (req, res) => {
     return res.json(webhookLogs);
   });
-  app.post("/api/webhook/logs/verbose", (req, res) => {
-    try {
-      const enable = req.body?.enable;
-      setVerboseLogs(!!enable);
-      return res.json({ success: true, verboseLogs });
-    } catch (e) {
-      return res.status(500).json({ error: e.message || String(e) });
-    }
-  });
   app.post("/api/webhook/logs/clear", (req, res) => {
     webhookLogs = [
       { id: `wlog-${Date.now()}`, timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR"), direction: "system", message: "Logs de Webhook limpos", details: "Monitor redefinido" }
     ];
     return res.json({ success: true });
-  });
-  app.post("/api/webhook/reset", async (req, res) => {
-    try {
-      const { fromNumber } = req.body || {};
-      await clearWhatsAppHistory(fromNumber);
-      return res.json({
-        success: true,
-        message: fromNumber ? `Hist\xF3rico limpo para ${fromNumber}.` : "Hist\xF3rico de WhatsApp limpo e cache de deduplica\xE7\xE3o reiniciado."
-      });
-    } catch (err) {
-      return res.status(500).json({ error: err.message || "Erro ao limpar o hist\xF3rico." });
-    }
   });
   app.get("/api/webhook/whatsapp", async (req, res) => {
     const mode = req.query["hub.mode"];
@@ -1404,326 +1232,213 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
   app.post("/api/webhook/whatsapp", async (req, res) => {
     try {
       const body = req.body;
-      verboseLog("debug", "Webhook POST received", JSON.stringify({ entry: body.entry?.length ? body.entry[0].changes?.[0]?.value?.messages?.[0] : {} }).slice(0, 1e3));
-      verboseLog("debug", "Webhook headers snapshot", JSON.stringify({ headers: req.headers }).slice(0, 1e3));
-      try {
-        verboseLog("debug", "Webhook body length", String(JSON.stringify(body).length));
-      } catch (e) {
-      }
-      const entries = Array.isArray(body.entry) ? body.entry : [];
-      let value = null;
-      let message = null;
-      let selectedTs = 0;
-      let totalMessageCandidates = 0;
-      for (const entryCandidate of entries) {
-        const changes = Array.isArray(entryCandidate?.changes) ? entryCandidate.changes : [];
-        for (const changeCandidate of changes) {
-          const valueCandidate = changeCandidate?.value;
-          const messagesCandidate = Array.isArray(valueCandidate?.messages) ? valueCandidate.messages : [];
-          totalMessageCandidates += messagesCandidate.length;
-          if (messagesCandidate.length > 0) {
-            for (const candidateMessage of messagesCandidate) {
-              const candidateTs = Number(candidateMessage?.timestamp || 0);
-              if (!message || candidateTs >= selectedTs) {
-                value = valueCandidate;
-                message = candidateMessage;
-                selectedTs = candidateTs;
-              }
-            }
-          }
-        }
-      }
+      console.log("WhatsApp Incoming webhook:", JSON.stringify(body, null, 2));
+      const entry = body.entry?.[0];
+      const change = entry?.changes?.[0];
+      const value = change?.value;
+      const message = value?.messages?.[0];
       if (!message) {
-        console.info(`[Webhook] no inbound message in payload (messageCandidates=${totalMessageCandidates})`);
         return res.status(200).send("EVENT_RECEIVED");
       }
       const fromNumber = message.from;
-      const rawMessageId = message.id;
+      const messageId = message.id;
       const messageType = message.type;
       const customerName = value.contacts?.[0]?.profile?.name || "Cliente WhatsApp";
-      const messageText = String(message.text?.body || "").trim();
-      const fallbackId = messageText ? `${messageText.slice(0, 12).replace(/\s+/g, "-").replace(/[^a-zA-Z0-9\-]/g, "").toLowerCase()}-${messageText.length}` : "no_text";
-      if (!fromNumber) {
-        console.warn("WhatsApp message missing from number, ignoring event.");
-        return res.status(200).send("EVENT_RECEIVED");
-      }
-      console.info(`[Webhook] inbound message event from=${fromNumber} id=${rawMessageId || "n/a"} type=${messageType}`);
-      const messageId = rawMessageId || `${fromNumber}:${message.timestamp || Date.now()}:${fallbackId}`;
-      if (messageText && shouldSkipDuplicateReply(fromNumber, messageText)) {
-        console.info(`[Webhook] skipped by recent reply cache from=${fromNumber}`);
-        addWebhookLog("system", `Resposta recente ignorada`, `Mensagem duplicada ou retry detectado para ${fromNumber}.`);
-        return res.status(200).send("EVENT_RECEIVED");
-      }
-      if (processedMessageIds.has(messageId)) {
-        console.log(`[Deduplication] Message ${messageId} already processed or currently processing (in-memory). Ignoring retry.`);
-        return res.status(200).send("EVENT_RECEIVED");
-      }
-      processedMessageIds.add(messageId);
-      if (processedMessageIds.size > 1e3) {
-        const firstItem = processedMessageIds.values().next().value;
-        if (firstItem) processedMessageIds.delete(firstItem);
+      if (messageId) {
+        if (processedMessageIds.has(messageId)) {
+          console.log(`[Deduplication] Message ${messageId} already processed or currently processing (in-memory). Ignoring retry.`);
+          return res.status(200).send("EVENT_RECEIVED");
+        }
+        processedMessageIds.add(messageId);
+        if (processedMessageIds.size > 1e3) {
+          const firstItem = processedMessageIds.values().next().value;
+          if (firstItem) processedMessageIds.delete(firstItem);
+        }
       }
       res.status(200).send("EVENT_RECEIVED");
       (async () => {
-        try {
-          const existingLock = processingLocks.get(fromNumber);
-          if (existingLock && Date.now() - existingLock < PROCESSING_LOCK_MS) {
-            console.info(`[Webhook] concurrent message allowed from=${fromNumber} (lock age=${Date.now() - existingLock}ms)`);
-            addWebhookLog("system", `Mensagem concorrente recebida`, `Processamento paralelo permitido para ${fromNumber}; deduplica\xE7\xE3o por messageId/fingerprint permanece ativa.`);
-          }
-          processingLocks.set(fromNumber, Date.now());
-          if (messageType !== "text" || !messageText) {
-            console.info(`[Webhook] skipped non-text message from=${fromNumber} type=${messageType}`);
-            addWebhookLog("system", `Mensagem ignorada de ${customerName}`, `Tipo de mensagem recebida: ${messageType}. Apenas mensagens de texto n\xE3o vazias s\xE3o processadas automaticamente.`);
-            if (messageId && db) {
-              try {
-                await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
-              } catch (e) {
-              }
+        if (messageId && db) {
+          try {
+            const msgRef = (0, import_firestore.doc)(db, "processed_messages", messageId);
+            const msgSnap = await (0, import_firestore.getDoc)(msgRef);
+            if (msgSnap.exists()) {
+              console.log(`[Deduplication] Message ${messageId} already processed (Firestore). Ignoring retry.`);
+              return;
             }
-            return;
+          } catch (e) {
+            console.error("[Deduplication] Error checking Firestore for duplicates:", e.message);
           }
-          if (isWhatsAppUninterested(messageText)) {
-            console.info(`[Webhook] skipped uninterested contact from=${fromNumber}`);
-            addWebhookLog("system", `Contato n\xE3o qualificado`, `Usu\xE1rio de ${fromNumber} indicou falta de interesse: "${messageText}". Pulando resposta de IA.`);
-            if (messageId && db) {
-              try {
-                await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString(), fromNumber, customerName, messageText, uninterested: true });
-              } catch (e) {
-              }
+        }
+        if (messageType !== "text") {
+          addWebhookLog("system", `Mensagem ignorada de ${customerName}`, `Tipo de mensagem recebida: ${messageType}. Apenas mensagens de texto s\xE3o processadas automaticamente.`);
+          if (messageId && db) {
+            try {
+              await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
+            } catch (e) {
             }
-            return;
           }
-          const storedConfig = await getFirebaseConfig();
-          if (!storedConfig) {
-            addWebhookLog("error", `Falha ao processar mensagem`, `Configura\xE7\xE3o da empresa ausente no servidor. Configure os dados no painel.`);
-            return;
-          }
-          const businessPhoneNumber = value?.metadata?.display_phone_number;
-          const normalizedFrom = fromNumber ? String(fromNumber).replace(/\D/g, "") : "";
-          const normalizedBusiness = businessPhoneNumber ? String(businessPhoneNumber).replace(/\D/g, "") : "";
-          const normalizedConfigPhone = storedConfig?.phone ? String(storedConfig.phone).replace(/\D/g, "") : "";
-          const isOwnNumber = normalizedBusiness && normalizedFrom === normalizedBusiness || normalizedConfigPhone && normalizedFrom.slice(-8) === normalizedConfigPhone.slice(-8);
-          if (isOwnNumber) {
-            console.log(`[Loop Prevention] Message is from the business's own number (${fromNumber}). Ignoring to prevent infinite response loop.`);
-            addWebhookLog("system", `Mensagem do n\xFAmero pr\xF3prio ignorada`, `Evitando loop de auto-resposta para o pr\xF3prio n\xFAmero da empresa (${fromNumber}).`);
-            if (messageId && db) {
-              try {
-                await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
-              } catch (e) {
-              }
+          return;
+        }
+        const messageText = message.text?.body;
+        const storedConfig = await getFirebaseConfig();
+        if (!storedConfig) {
+          addWebhookLog("error", `Falha ao processar mensagem`, `Configura\xE7\xE3o da empresa ausente no servidor. Configure os dados no painel.`);
+          return;
+        }
+        const businessPhoneNumber = value?.metadata?.display_phone_number;
+        const normalizedFrom = fromNumber ? String(fromNumber).replace(/\D/g, "") : "";
+        const normalizedBusiness = businessPhoneNumber ? String(businessPhoneNumber).replace(/\D/g, "") : "";
+        const normalizedConfigPhone = storedConfig?.phone ? String(storedConfig.phone).replace(/\D/g, "") : "";
+        const isOwnNumber = normalizedBusiness && normalizedFrom === normalizedBusiness || normalizedConfigPhone && normalizedFrom.slice(-8) === normalizedConfigPhone.slice(-8);
+        if (isOwnNumber) {
+          console.log(`[Loop Prevention] Message is from the business's own number (${fromNumber}). Ignoring to prevent infinite response loop.`);
+          addWebhookLog("system", `Mensagem do n\xFAmero pr\xF3prio ignorada`, `Evitando loop de auto-resposta para o pr\xF3prio n\xFAmero da empresa (${fromNumber}).`);
+          if (messageId && db) {
+            try {
+              await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
+            } catch (e) {
             }
-            return;
           }
-          const incomingPhoneNumberId = value?.metadata?.phone_number_id;
-          const { whatsappAccessToken, whatsappPhoneNumberId } = storedConfig;
-          if (whatsappPhoneNumberId && incomingPhoneNumberId && String(whatsappPhoneNumberId).trim() !== String(incomingPhoneNumberId).trim()) {
-            console.info(`[Webhook] skipped by phone_number_id mismatch incoming=${incomingPhoneNumberId} configured=${whatsappPhoneNumberId}`);
-            addWebhookLog("system", `Mensagem recebida para o ID de Telefone ${incomingPhoneNumberId} ignorada`, `O servidor est\xE1 configurado para responder apenas ao ID ${whatsappPhoneNumberId}. Isso evita conflitos com o n\xFAmero de teste ou outros n\xFAmeros da conta.`);
-            console.log(`Webhook ignored: incoming phone_number_id (${incomingPhoneNumberId}) does not match configured ID (${whatsappPhoneNumberId})`);
-            if (messageId && db) {
-              try {
-                await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
-              } catch (e) {
-              }
+          return;
+        }
+        const incomingPhoneNumberId = value?.metadata?.phone_number_id;
+        const { whatsappAccessToken, whatsappPhoneNumberId } = storedConfig;
+        if (whatsappPhoneNumberId && incomingPhoneNumberId && String(whatsappPhoneNumberId).trim() !== String(incomingPhoneNumberId).trim()) {
+          addWebhookLog("system", `Mensagem recebida para o ID de Telefone ${incomingPhoneNumberId} ignorada`, `O servidor est\xE1 configurado para responder apenas ao ID ${whatsappPhoneNumberId}. Isso evita conflitos com o n\xFAmero de teste ou outros n\xFAmeros da conta.`);
+          console.log(`Webhook ignored: incoming phone_number_id (${incomingPhoneNumberId}) does not match configured ID (${whatsappPhoneNumberId})`);
+          if (messageId && db) {
+            try {
+              await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
+            } catch (e) {
             }
-            return;
           }
-          if (storedConfig.autoRespondWhatsApp === false || storedConfig.autoRespondWhatsApp === "false") {
-            console.info(`[Webhook] skipped because autoRespondWhatsApp=false from=${fromNumber}`);
-            addWebhookLog("system", `Mensagem recebida de ${customerName}, mas Auto-Resposta est\xE1 desativada`, `O rob\xF4 n\xE3o responder\xE1 automaticamente no momento porque o Auto-WhatsApp est\xE1 desativado no painel.`);
-            if (messageId && db) {
-              try {
-                await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
-              } catch (e) {
-              }
+          return;
+        }
+        if (storedConfig.autoRespondWhatsApp === false || storedConfig.autoRespondWhatsApp === "false") {
+          addWebhookLog("system", `Mensagem recebida de ${customerName}, mas Auto-Resposta est\xE1 desativada`, `O rob\xF4 n\xE3o responder\xE1 automaticamente no momento porque o Auto-WhatsApp est\xE1 desativado no painel.`);
+          if (messageId && db) {
+            try {
+              await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
+            } catch (e) {
             }
-            return;
           }
-          if (messageId) {
-            const claimed = await claimProcessedMessage(messageId, {
+          return;
+        }
+        if (messageId && db) {
+          try {
+            await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), {
+              processedAt: (/* @__PURE__ */ new Date()).toISOString(),
               fromNumber,
               customerName,
               messageText: messageText || ""
             });
-            if (!claimed) {
-              console.info(`[Webhook] skipped by atomic messageId claim id=${messageId}`);
-              addWebhookLog("system", `Mensagem duplicada ignorada (claim at\xF4mico)`, `MessageId j\xE1 processado: ${messageId}`);
-              return;
-            }
+          } catch (e) {
+            console.error("[Deduplication] Error marking message as processed in Firestore:", e.message);
           }
-          const fingerprintClaimed = await claimInboundFingerprint(fromNumber, messageText);
-          if (!fingerprintClaimed) {
-            console.info(`[Webhook] skipped by content fingerprint from=${fromNumber}`);
-            addWebhookLog("system", `Mensagem duplicada por conte\xFAdo ignorada`, `Fingerprint repetido em janela curta para ${fromNumber}.`);
-            return;
+        }
+        addWebhookLog("inbound", `Mensagem recebida de ${customerName} (${fromNumber})`, messageText);
+        if (whatsappAccessToken && whatsappPhoneNumberId && messageId) {
+          try {
+            await fetch(`https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${whatsappAccessToken}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                messaging_product: "whatsapp",
+                status: "read",
+                message_id: messageId
+              })
+            });
+          } catch (readErr) {
+            console.warn("Failed to mark message as read:", readErr.message);
           }
-          addWebhookLog("inbound", `Mensagem recebida de ${customerName} (${fromNumber})`, messageText);
-          if (whatsappAccessToken && whatsappPhoneNumberId && messageId) {
-            try {
-              await fetch(`https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`, {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${whatsappAccessToken}`,
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                  messaging_product: "whatsapp",
-                  status: "read",
-                  message_id: messageId
-                })
-              });
-            } catch (readErr) {
-              console.warn("Failed to mark message as read:", readErr.message);
-            }
-          }
-          const systemInstruction = buildSystemInstruction(storedConfig);
-          const historyData = await getWhatsAppHistory(fromNumber);
-          const history = Array.isArray(historyData) ? historyData.slice(-AI_CHAT_HISTORY_LIMIT) : [];
-          const contents = history.map((m) => ({
-            role: m.role === "user" ? "user" : "model",
-            parts: [{ text: m.text }]
-          }));
-          contents.push({
+        }
+        const systemInstruction = buildSystemInstruction(storedConfig);
+        const history = await getWhatsAppHistory(fromNumber);
+        const contentsList = history.filter((m) => m && m.text && typeof m.text === "string" && m.text.trim()).map((m) => ({
+          role: m.role === "user" ? "user" : "model",
+          parts: [{ text: m.text.trim() }]
+        }));
+        if (messageText && typeof messageText === "string" && messageText.trim()) {
+          contentsList.push({
             role: "user",
-            parts: [{ text: messageText }]
+            parts: [{ text: messageText.trim() }]
           });
-          let replyText = "";
-          const clarificationReply = getClarifyingResponseForIncompleteDeviceInfo(messageText, history);
-          if (clarificationReply) {
-            replyText = clarificationReply;
+        }
+        const contents = [];
+        for (const msg of contentsList) {
+          if (contents.length > 0 && contents[contents.length - 1].role === msg.role) {
+            const lastMsg = contents[contents.length - 1];
+            if (lastMsg.parts && lastMsg.parts[0] && msg.parts && msg.parts[0]) {
+              lastMsg.parts[0].text = `${lastMsg.parts[0].text}
+${msg.parts[0].text}`;
+            }
           } else {
-            const lowCostReply = getLowCostInstantReply(messageText, storedConfig);
-            if (lowCostReply) {
-              replyText = lowCostReply;
+            contents.push(msg);
+          }
+        }
+        let replyText = "";
+        try {
+          const client = getGeminiClient();
+          const response = await client.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents,
+            config: {
+              systemInstruction,
+              temperature: 0.7
             }
-          }
-          if (!replyText) {
-            try {
-              const client = getGeminiClient();
-              const { response } = await generateContentWithModelFallback(
-                client,
-                AI_MODEL_CHAT,
-                contents,
-                {
-                  systemInstruction,
-                  temperature: 0.55,
-                  maxOutputTokens: AI_CHAT_MAX_OUTPUT_TOKENS
-                }
-              );
-              replyText = response.text || "Ol\xE1! Desculpe, n\xE3o entendi.";
-            } catch (geminiError) {
-              console.error(`[Webhook] Gemini failure from=${fromNumber}:`, geminiError.message || geminiError);
-              addWebhookLog("error", "Falha no Gemini", `N\xFAmero: ${fromNumber}. Motivo: ${geminiError.message}`);
-              replyText = "Tive uma instabilidade r\xE1pida aqui. Me confirma, por favor, o modelo do aparelho e o defeito para eu continuar seu atendimento agora.";
-            }
-          }
-          replyText = finalizeReplyText(replyText, messageText, storedConfig);
-          const dedupKey = `${fromNumber}:${normalizeForDedup(messageText)}`;
-          recentReplyCache.set(dedupKey, { timestamp: Date.now(), replyText });
-          if (recentReplyCache.size > MAX_REPLY_CACHE_ENTRIES) {
-            const oldestKey = recentReplyCache.keys().next().value;
-            if (oldestKey) recentReplyCache.delete(oldestKey);
-          }
-          verboseLog("debug", `Prepared reply for ${fromNumber}`, String(replyText).slice(0, 300));
-          try {
-            const simpleHash = (s) => require("crypto").createHash("sha1").update(s).digest("hex").slice(0, 8);
-            verboseLog("debug", `Reply/Incoming hashes`, `in:${simpleHash(messageText || "")} out:${simpleHash(replyText || "")}`);
-          } catch (e) {
-          }
-          try {
-            if (db) {
-              const persistent = await getPersistentLastReply(fromNumber);
-              if (persistent && persistent.replyText) {
-                const persistentTs = Date.parse(persistent.timestamp || "") || 0;
-                if (Date.now() - persistentTs < REPLY_SIMILARITY_GUARD_MS && areRepliesSimilar(persistent.replyText, replyText)) {
-                  addWebhookLog("system", `Envio evitado \u2014 resposta similar j\xE1 enviada (persistente)`, `N\xFAmero: ${fromNumber}. Resposta anterior persistente: ${String(persistent.replyText).slice(0, 120)}`);
-                  lastReplyByNumber.set(fromNumber, { timestamp: Date.now(), replyText: persistent.replyText });
-                  return;
-                }
-              }
-            }
-          } catch (e) {
-            console.error("Error checking persistent last reply:", e.message || e);
-          }
-          const lastEntry = lastReplyByNumber.get(fromNumber);
-          if (lastEntry && Date.now() - lastEntry.timestamp < REPLY_SIMILARITY_GUARD_MS && areRepliesSimilar(lastEntry.replyText, replyText)) {
-            addWebhookLog("system", `Envio evitado \u2014 resposta similar j\xE1 enviada`, `N\xFAmero: ${fromNumber}. Resposta anterior: ${String(lastEntry.replyText).slice(0, 120)}`);
-            lastReplyByNumber.set(fromNumber, { timestamp: Date.now(), replyText: lastEntry.replyText });
-            return;
-          }
-          const lastModelEntry = [...history].reverse().find((m) => m?.role === "model" && m?.text);
-          if (lastModelEntry) {
-            const lastModelTs = Date.parse(lastModelEntry.timestamp || "") || 0;
-            if (Date.now() - lastModelTs < REPLY_SIMILARITY_GUARD_MS && areRepliesSimilar(String(lastModelEntry.text || ""), replyText)) {
-              addWebhookLog("system", `Envio evitado \u2014 resposta similar detectada no hist\xF3rico`, `N\xFAmero: ${fromNumber}. \xDAltima resposta: ${String(lastModelEntry.text).slice(0, 120)}`);
-              return;
-            }
-          }
+          });
+          replyText = response.text || "Ol\xE1! Desculpe, n\xE3o entendi.";
           const updatedHistory = [
             ...history,
             { role: "user", text: messageText, timestamp: (/* @__PURE__ */ new Date()).toISOString() },
             { role: "model", text: replyText, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
           ];
           await saveWhatsAppHistory(fromNumber, updatedHistory);
-          addWebhookLog("outbound", `Resposta gerada pela IA`, replyText);
-          if (whatsappAccessToken && whatsappPhoneNumberId) {
-            try {
-              lastReplyByNumber.set(fromNumber, { timestamp: Date.now(), replyText });
-              if (db) {
-                await setPersistentLastReply(fromNumber, replyText);
-              }
-            } catch (reserveErr) {
-              verboseLog("debug", "Error reserving last reply before send", reserveErr?.message || String(reserveErr));
-            }
-            const simulatedTypingMs = Math.min(Math.max(1500, replyText.length * 18), 4500);
-            addWebhookLog("system", `Simulando digita\xE7\xE3o do atendente`, `Aguardando ${simulatedTypingMs}ms antes de enviar para imitar a digita\xE7\xE3o humana.`);
-            await new Promise((resolve) => setTimeout(resolve, simulatedTypingMs));
-            try {
-              const fbResponse = await fetch(`https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`, {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${whatsappAccessToken}`,
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                  messaging_product: "whatsapp",
-                  to: fromNumber,
-                  type: "text",
-                  text: {
-                    body: replyText
-                  }
-                })
-              });
-              const fbResult = await fbResponse.json();
-              if (fbResponse.ok) {
-                console.info(`[Webhook] message sent to=${fromNumber} id=${fbResult.messages?.[0]?.id || "n/a"}`);
-                addWebhookLog("system", `Mensagem oficial enviada via API do WhatsApp`, `Mensagem enviada com sucesso para ${fromNumber}. ID: ${fbResult.messages?.[0]?.id || "N/A"}`);
-                try {
-                  lastReplyByNumber.set(fromNumber, { timestamp: Date.now(), replyText });
-                  verboseLog("debug", `Persisting last reply for ${fromNumber}`, String(replyText).slice(0, 300));
-                  if (db) {
-                    await setPersistentLastReply(fromNumber, replyText);
-                  }
-                } catch (e) {
-                  verboseLog("debug", "Error persisting last reply", String(e));
-                }
-              } else {
-                console.error(`[Webhook] WhatsApp API send failure to=${fromNumber}:`, JSON.stringify(fbResult));
-                addWebhookLog("error", `Falha ao enviar mensagem via API do WhatsApp`, JSON.stringify(fbResult));
-              }
-            } catch (fetchError) {
-              console.error(`[Webhook] request error while sending to=${fromNumber}:`, fetchError.message || fetchError);
-              addWebhookLog("error", `Erro na requisi\xE7\xE3o para a API do WhatsApp`, fetchError.message);
-            }
-          } else {
-            addWebhookLog("system", `Mensagem de IA pronta, mas envio oficial desativado`, `Insira as credenciais do WhatsApp Cloud API no painel de Integra\xE7\xE3o para enviar respostas oficiais diretamente.`);
-          }
-        } finally {
+        } catch (geminiError) {
+          console.warn("Fallback response used in webhook because Gemini failed:", geminiError.message);
+          replyText = `Ol\xE1, ${customerName}! Sou o assistente inteligente da ${storedConfig.name}. No momento, estamos processando sua mensagem. Nosso hor\xE1rio \xE9 ${storedConfig.businessHours}.`;
+          const updatedHistory = [
+            ...history,
+            { role: "user", text: messageText, timestamp: (/* @__PURE__ */ new Date()).toISOString() },
+            { role: "model", text: replyText, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+          ];
+          await saveWhatsAppHistory(fromNumber, updatedHistory);
+        }
+        addWebhookLog("outbound", `Resposta gerada pela IA`, replyText);
+        if (whatsappAccessToken && whatsappPhoneNumberId) {
+          const simulatedTypingMs = Math.min(Math.max(1500, replyText.length * 18), 4500);
+          addWebhookLog("system", `Simulando digita\xE7\xE3o do atendente`, `Aguardando ${simulatedTypingMs}ms antes de enviar para imitar a digita\xE7\xE3o humana.`);
+          await new Promise((resolve) => setTimeout(resolve, simulatedTypingMs));
           try {
-            processingLocks.delete(fromNumber);
-          } catch (e) {
+            const fbResponse = await fetch(`https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${whatsappAccessToken}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                messaging_product: "whatsapp",
+                to: fromNumber,
+                type: "text",
+                text: {
+                  body: replyText
+                }
+              })
+            });
+            const fbResult = await fbResponse.json();
+            if (fbResponse.ok) {
+              addWebhookLog("system", `Mensagem oficial enviada via API do WhatsApp`, `Mensagem enviada com sucesso para ${fromNumber}. ID: ${fbResult.messages?.[0]?.id || "N/A"}`);
+            } else {
+              addWebhookLog("error", `Falha ao enviar mensagem via API do WhatsApp`, JSON.stringify(fbResult));
+            }
+          } catch (fetchError) {
+            addWebhookLog("error", `Erro na requisi\xE7\xE3o para a API do WhatsApp`, fetchError.message);
           }
+        } else {
+          addWebhookLog("system", `Mensagem de IA pronta, mas envio oficial desativado`, `Insira as credenciais do WhatsApp Cloud API no painel de Integra\xE7\xE3o para enviar respostas oficiais diretamente.`);
         }
       })().catch((asyncErr) => {
         console.error("Critical error in async background webhook processing:", asyncErr);
@@ -1739,15 +1454,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
     }
   });
   app.get("/api/health", (req, res) => {
-    res.json({
-      status: "ok",
-      time: /* @__PURE__ */ new Date(),
-      appVersion: APP_VERSION,
-      dedupe: {
-        inboundFingerprintCooldownMs: INBOUND_FINGERPRINT_COOLDOWN_MS,
-        replySimilarityGuardMs: REPLY_SIMILARITY_GUARD_MS
-      }
-    });
+    res.json({ status: "ok", time: /* @__PURE__ */ new Date() });
   });
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
@@ -1761,10 +1468,6 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
     app.get("*", (req, res) => {
       res.sendFile(import_path.default.join(distPath, "index.html"));
     });
-  }
-  if (String(process.env.RESET_WHATSAPP_HISTORY_ON_BOOT || "false").toLowerCase() === "true") {
-    await clearWhatsAppHistory();
-    console.warn("WhatsApp history was reset on boot because RESET_WHATSAPP_HISTORY_ON_BOOT=true");
   }
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT} (http://localhost:${PORT})`);
