@@ -1,0 +1,1 @@
+{ "entry": [ { "changes": [ { "value": { "messages": [ { "from": "5511999999998", "id": "msg-10", "timestamp": "1620000010", "type": "text", "text": { "body": "Teste persistente" } } ], "contacts": [ { "profile": { "name": "Cliente Persistente" } } ], "metadata": { "display_phone_number": "5511987654321", "phone_number_id": "1256883267499769" } } } ] } ] }

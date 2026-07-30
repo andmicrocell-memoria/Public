@@ -1,4 +1,14 @@
 {
+  "firestore": [
+    {
+      "database": "(default)",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "ai-studio-zetachatai-3dcef398-a4dc-47e6-8792-542eb1d19d97",
+      "rules": "firestore.rules"
+    }
+  ],
   "hosting": {
     "public": "dist",
     "ignore": [

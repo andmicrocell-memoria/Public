@@ -10,6 +10,21 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read, write: if true;
     }
+
+    // Enable reading and writing processed message IDs to prevent duplicates
+    match /processed_messages/{messageId} {
+      allow read, write: if true;
+    }
+
+    // Enable reading and writing WhatsApp history for persistence
+    match /whatsapp_history/{fromNumber} {
+      allow read, write: if true;
+    }
+
+    // Enable reading and writing persistent last reply cache for dedupe across restarts
+    match /last_replies/{fromNumber} {
+      allow read, write: if true;
+    }
     
     // Default deny for everything else
     match /{document=**} {

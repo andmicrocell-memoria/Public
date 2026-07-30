@@ -1,0 +1,61 @@
+PLANO DE 7 DIAS - SITE ANDMICROCELL
+
+Objetivo da semana:
+Transformar o site em um canal mais dinamico, com mais conversao para WhatsApp e mais geracao de receita.
+
+DIA 1 - FUNIL E METAS
+1) Definir objetivo principal da semana: gerar conversas qualificadas no WhatsApp.
+2) Definir 3 metas numericas:
+- taxa de clique no botao de WhatsApp
+- leads por dia
+- taxa de fechamento por lead
+3) Definir proposta de valor da home em 1 frase:
+Diagnostico rapido + orcamento sem compromisso + prazo de retorno.
+
+DIA 2 - HOME COM CONVERSAO FORTE
+1) Ajustar primeiro bloco da home com promessa clara, prova social e CTA principal.
+2) Adicionar CTA fixo no mobile: Fazer orcamento agora.
+3) Criar secao de servicos mais buscados: troca de tela, bateria, conector, reparo de placa.
+4) Cada card com CTA direto para WhatsApp.
+
+DIA 3 - DIAGNOSTICO RAPIDO INTERATIVO
+1) Criar formulario de 3 etapas: aparelho, problema, urgencia.
+2) Ao final, abrir WhatsApp com mensagem pronta baseada nas respostas.
+3) Adicionar barra de progresso para aumentar conclusao.
+4) Rastrear eventos: iniciou diagnostico, concluiu diagnostico, clicou no WhatsApp final.
+
+DIA 4 - CONTEUDO QUE CONVERTE
+1) Publicar 3 conteudos curtos com estrutura: problema real, erro comum, solucao pratica, CTA para orcamento.
+2) Usar formato escaneavel: checklist, mito vs verdade, antes e depois.
+3) Adicionar posts relacionados para aumentar navegacao interna.
+
+DIA 5 - MONETIZACAO DIRETA E INDIRETA
+1) Receita principal: geracao de servico (lead para assistencia).
+2) Criar upsell no atendimento: pelicula, capa, carregador premium, cabo reforcado.
+3) Criar oferta local para empresas: manutencao recorrente para equipes.
+4) Area de parceria/afiliado (somente produtos recomendados de verdade).
+
+DIA 6 - PROVA SOCIAL E CONFIANCA
+1) Inserir avaliacoes reais do Google.
+2) Mostrar indicadores: tempo medio de atendimento, numero de aparelhos atendidos, taxa de satisfacao.
+3) Criar bloco de garantia e transparencia: prazo, pecas, suporte pos-servico.
+
+DIA 7 - OTIMIZACAO E PROXIMA SEMANA
+1) Revisar metricas da semana.
+2) Identificar paginas e CTAs com melhor resultado.
+3) Melhorar titulos e chamadas dos blocos com base nos dados.
+4) Definir 2 testes para semana seguinte: texto do CTA principal e ordem dos blocos na home.
+
+FORMULA DE RECEITA MENSAL
+Receita mensal = visitas x taxa de lead x taxa de fechamento x ticket medio
+
+Exemplo:
+5000 visitas x 4% leads x 35% fechamento x R$ 250
+Resultado aproximado: R$ 17.500/mes
+
+TEXTO CURTO PARA ABRIR O OUTRO CHAT
+"Quero implementar este plano de 7 dias no site da AndMicrocell com foco em:
+1) mais dinamismo visual,
+2) mais conversao para WhatsApp,
+3) aumento de receita por servicos e upsell.
+Comece pelo Dia 1 e Dia 2 com tarefas praticas e codigo necessario."

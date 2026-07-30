@@ -1,0 +1,1 @@
+{ "entry": [ { "changes": [ { "value": { "messages": [ { "from": "5511999999997", "id": "mdup-1", "timestamp": "1620000020", "type": "text", "text": { "body": "Boa noite! Tudo bem? 😊" } } ], "contacts": [ { "profile": { "name": "Cliente Exemplo" } } ], "metadata": { "display_phone_number": "5511987654321", "phone_number_id": "1256883267499769" } } } ] } ] }

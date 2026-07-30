@@ -4,6 +4,15 @@ export interface FAQ {
   answer: string;
 }
 
+export interface PricingItem {
+  id: string;
+  category: 'iphone' | 'android' | 'notebook' | 'other';
+  deviceModel: string;
+  serviceName: string;
+  priceEstimate: string;
+  notes?: string;
+}
+
 export interface BusinessConfig {
   name: string;
   category: string;
@@ -19,6 +28,7 @@ export interface BusinessConfig {
   whatsappAccessToken?: string;
   whatsappPhoneNumberId?: string;
   whatsappVerifyToken?: string;
+  pricingTable?: PricingItem[];
 }
 
 export interface Testimonial {

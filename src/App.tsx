@@ -37,7 +37,8 @@ import {
   GoogleReview, 
   AgentLog,
   getApiUrl,
-  Testimonial
+  Testimonial,
+  PricingItem
 } from "./types";
 import PublicSite from "./components/PublicSite";
 import BlogAdmin from "./components/BlogAdmin";
@@ -115,6 +116,21 @@ export default function App() {
     }
   ];
 
+  const defaultPricingTableList: PricingItem[] = [
+    { id: "p-1", category: "iphone", deviceModel: "iPhone 11", serviceName: "Troca de Tela Premium (OLED)", priceEstimate: "A partir de R$ 320", notes: "Tela qualidade premium com True Tone ativo naturalmente." },
+    { id: "p-2", category: "iphone", deviceModel: "iPhone 11", serviceName: "Troca de Bateria Premium", priceEstimate: "A partir de R$ 180", notes: "Excelente durabilidade, similar à original de fábrica." },
+    { id: "p-3", category: "iphone", deviceModel: "iPhone 12", serviceName: "Troca de Tela Premium (OLED)", priceEstimate: "A partir de R$ 550", notes: "Tela qualidade premium com True Tone ativo." },
+    { id: "p-4", category: "iphone", deviceModel: "iPhone 12", serviceName: "Troca de Bateria Premium", priceEstimate: "A partir de R$ 260", notes: "Excelente durabilidade, similar à original de fábrica." },
+    { id: "p-5", category: "iphone", deviceModel: "iPhone 13", serviceName: "Troca de Tela Premium (OLED)", priceEstimate: "A partir de R$ 850", notes: "Tela premium, cores e toque perfeitos." },
+    { id: "p-6", category: "iphone", deviceModel: "iPhone 13", serviceName: "Troca de Bateria Premium", priceEstimate: "A partir de R$ 350", notes: "Excelente durabilidade, similar à original de fábrica." },
+    { id: "p-7", category: "android", deviceModel: "Samsung Linha S (S20/S21)", serviceName: "Troca de Tela Premium", priceEstimate: "A partir de R$ 650", notes: "Qualidade premium com alta definição de toque." },
+    { id: "p-8", category: "notebook", deviceModel: "Notebooks (Dell, Lenovo, HP, etc)", serviceName: "Instalação de SSD 240GB + Limpeza Interna + Formatação", priceEstimate: "A partir de R$ 220", notes: "Garante até 10x mais velocidade de inicialização." },
+    { id: "p-9", category: "notebook", deviceModel: "Notebooks (Dell, Lenovo, HP, etc)", serviceName: "Instalação de SSD 480GB + Limpeza Interna + Formatação", priceEstimate: "A partir de R$ 290", notes: "Garante até 10x mais velocidade de inicialização e muito mais espaço." },
+    { id: "p-10", category: "notebook", deviceModel: "Notebooks (Qualquer marca)", serviceName: "Limpeza Física Interna + Troca de Pasta Térmica Prata", priceEstimate: "R$ 100", notes: "Essencial para evitar lentidão e desligamento por superaquecimento." },
+    { id: "p-11", category: "iphone", deviceModel: "iPhone (Qualquer modelo)", serviceName: "Serviço Adicional de Transplante (EEPROM ou BMS)", priceEstimate: "R$ 150 adicionais", notes: "Procedimento de micro-solda opcional para remover a mensagem de peça desconhecida." },
+    { id: "p-12", category: "other", deviceModel: "Celulares (Geral)", serviceName: "Desoxidação Química Profissional (Aparelhos molhados)", priceEstimate: "A partir de R$ 120", notes: "Processo de lavagem química em cuba ultrassônica para remover oxidações." }
+  ];
+
   const defaultBusinessConfig: BusinessConfig = {
     name: "AndMicrocell - Assistência Técnica",
     category: "Consertos em Iphones. Reparos avançados em Placas.",
@@ -126,7 +142,8 @@ export default function App() {
     faqs: defaultFAQList,
     testimonials: defaultTestimonialList,
     autoRespondWhatsApp: true,
-    autoRespondReviews: true
+    autoRespondReviews: true,
+    pricingTable: defaultPricingTableList
   };
 
   const defaultSessions: ChatSession[] = [
@@ -219,6 +236,9 @@ export default function App() {
         if (!parsed.testimonials || parsed.testimonials.length === 0) {
           parsed.testimonials = defaultTestimonialList;
         }
+        if (!parsed.pricingTable || parsed.pricingTable.length === 0) {
+          parsed.pricingTable = defaultPricingTableList;
+        }
         return parsed;
       } catch (e) {
         return defaultBusinessConfig;
@@ -243,7 +263,7 @@ export default function App() {
   });
 
   // 3. UI State Managers
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'whatsapp' | 'google' | 'settings' | 'integration' | 'blog'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'whatsapp' | 'google' | 'settings' | 'integration' | 'blog' | 'pricing'>('dashboard');
   const [isViewingPublicSite, setIsViewingPublicSite] = useState(() => {
     const isAiStudio = window.location.hostname.includes("run.app") || 
                        window.location.hostname.includes("localhost") || 
@@ -283,6 +303,16 @@ export default function App() {
   const [customReviewComment, setCustomReviewComment] = useState("");
   const [customReviewRating, setCustomReviewRating] = useState(5);
   const [showAddReviewForm, setShowAddReviewForm] = useState(false);
+  
+  // States for Pricing Table management
+  const [pricingSearch, setPricingSearch] = useState("");
+  const [pricingCategoryFilter, setPricingCategoryFilter] = useState<string>("all");
+  const [pricingDeviceModel, setPricingDeviceModel] = useState("");
+  const [pricingServiceName, setPricingServiceName] = useState("");
+  const [pricingEstimate, setPricingEstimate] = useState("");
+  const [pricingNotes, setPricingNotes] = useState("");
+  const [pricingCategory, setPricingCategory] = useState<'iphone' | 'android' | 'notebook' | 'other'>("iphone");
+  const [editingPricingId, setEditingPricingId] = useState<string | null>(null);
   
   const [activeTestimonialName, setActiveTestimonialName] = useState("");
   const [activeTestimonialRole, setActiveTestimonialRole] = useState("");
@@ -801,6 +831,74 @@ export default function App() {
     addLog("system", `Depoimento de cliente removido`, testimonialObj?.name);
   };
 
+  const handleSavePricingItem = () => {
+    if (!pricingDeviceModel.trim() || !pricingServiceName.trim() || !pricingEstimate.trim()) return;
+    
+    const table = config.pricingTable || [];
+    
+    if (editingPricingId) {
+      const updatedTable = table.map(item => {
+        if (item.id === editingPricingId) {
+          return {
+            ...item,
+            category: pricingCategory,
+            deviceModel: pricingDeviceModel,
+            serviceName: pricingServiceName,
+            priceEstimate: pricingEstimate,
+            notes: pricingNotes
+          };
+        }
+        return item;
+      });
+      setConfig(prev => ({ ...prev, pricingTable: updatedTable }));
+      addLog("system", `Preço atualizado para ${pricingDeviceModel}`, pricingServiceName);
+      setEditingPricingId(null);
+    } else {
+      const newItem: PricingItem = {
+        id: `p-${Date.now()}`,
+        category: pricingCategory,
+        deviceModel: pricingDeviceModel,
+        serviceName: pricingServiceName,
+        priceEstimate: pricingEstimate,
+        notes: pricingNotes
+      };
+      setConfig(prev => ({ ...prev, pricingTable: [...table, newItem] }));
+      addLog("system", `Novo preço cadastrado para ${pricingDeviceModel}`, pricingServiceName);
+    }
+    
+    setPricingDeviceModel("");
+    setPricingServiceName("");
+    setPricingEstimate("");
+    setPricingNotes("");
+    setPricingCategory("iphone");
+  };
+
+  const handleDeletePricingItem = (id: string) => {
+    const table = config.pricingTable || [];
+    const itemObj = table.find(item => item.id === id);
+    const updatedTable = table.filter(item => item.id !== id);
+    setConfig(prev => ({ ...prev, pricingTable: updatedTable }));
+    addLog("system", `Serviço removido da tabela de preços`, itemObj?.deviceModel);
+  };
+
+  const handleStartEditPricingItem = (item: PricingItem) => {
+    setEditingPricingId(item.id);
+    setPricingCategory(item.category);
+    setPricingDeviceModel(item.deviceModel);
+    setPricingServiceName(item.serviceName);
+    setPricingEstimate(item.priceEstimate);
+    setPricingNotes(item.notes || "");
+  };
+
+  const handleCancelEditPricingItem = () => {
+    setEditingPricingId(null);
+    setPricingDeviceModel("");
+    setPricingServiceName("");
+    setPricingEstimate("");
+    setPricingNotes("");
+    setPricingCategory("iphone");
+  };
+
   const handleSimulateNewReview = (rating: number, comment: string, author: string) => {
     const newRev: GoogleReview = {
       id: `rev-${Date.now()}`,
@@ -995,6 +1093,22 @@ export default function App() {
               >
                 <Settings className="w-4 h-4" />
                 <span>Base de Conhecimento</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('pricing')}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'pricing'
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10'
+                    : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                }`}
+                id="btn-nav-pricing"
+              >
+                <Briefcase className="w-4 h-4 text-emerald-400" />
+                <span className="flex items-center gap-1.5">
+                  Tabela de Preços
+                  <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">IA</span>
+                </span>
               </button>
 
               <button
@@ -2303,6 +2417,290 @@ export default function App() {
                   >
                     Limpar Transações do Webhook
                   </button>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'pricing' && (
+              <motion.div
+                key="pricing-tab"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+                className="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full"
+                id="pricing-tab-panel"
+              >
+                {/* Form to Add/Edit Price */}
+                <div className="lg:col-span-1 p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 h-fit space-y-6" id="pricing-form-panel">
+                  <div>
+                    <h3 className="font-display font-semibold text-base text-white flex items-center gap-2" id="pricing-form-title">
+                      <Sparkles className="w-5 h-5 text-emerald-400" />
+                      {editingPricingId ? "Editar Preço de Serviço" : "Adicionar Novo Preço"}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1" id="pricing-form-subtitle">
+                      Preencha os campos para alimentar o banco de dados que a IA utilizará para responder orçamentos.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4" id="pricing-form-body">
+                    <div className="space-y-1.5" id="group-pricing-category">
+                      <label className="text-xs text-slate-400 font-medium">Categoria do Aparelho</label>
+                      <select
+                        value={pricingCategory}
+                        onChange={(e) => setPricingCategory(e.target.value as any)}
+                        className="w-full bg-[#131a2c] text-slate-200 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                        id="select-pricing-category"
+                      >
+                        <option value="iphone">Apple (iPhone)</option>
+                        <option value="android">Celulares Android (Samsung/Motorola/etc)</option>
+                        <option value="notebook">Notebooks & Computadores</option>
+                        <option value="other">Outros Serviços (Desoxidação/Placas)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5" id="group-pricing-model">
+                      <label className="text-xs text-slate-400 font-medium">Modelo do Aparelho</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: iPhone 11, Samsung S21, MacBook Pro 2020"
+                        value={pricingDeviceModel}
+                        onChange={(e) => setPricingDeviceModel(e.target.value)}
+                        className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                        id="input-pricing-model"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5" id="group-pricing-service">
+                      <label className="text-xs text-slate-400 font-medium">Serviço Realizado</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Troca de Tela Premium (OLED), Upgrade SSD"
+                        value={pricingServiceName}
+                        onChange={(e) => setPricingServiceName(e.target.value)}
+                        className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                        id="input-pricing-service"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5" id="group-pricing-estimate">
+                      <label className="text-xs text-slate-400 font-medium">Estimativa de Preço / Faixa</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: A partir de R$ 320, R$ 150 - R$ 220"
+                        value={pricingEstimate}
+                        onChange={(e) => setPricingEstimate(e.target.value)}
+                        className="w-full bg-[#131a2c] text-emerald-400 placeholder-slate-600 border border-slate-800 rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-indigo-500 outline-none"
+                        id="input-pricing-estimate"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5" id="group-pricing-notes">
+                      <label className="text-xs text-slate-400 font-medium">Diferenciais / Notas de Qualidade (Opcional)</label>
+                      <textarea
+                        rows={3}
+                        placeholder="Ex: Tela OLED premium, mantém True Tone ativo, inclui película de vidro de brinde e garantia de 6 meses."
+                        value={pricingNotes}
+                        onChange={(e) => setPricingNotes(e.target.value)}
+                        className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl p-3 text-xs focus:ring-1 focus:ring-indigo-500 outline-none resize-none leading-relaxed"
+                        id="textarea-pricing-notes"
+                      />
+                    </div>
+
+                    <div className="pt-2 flex gap-3" id="pricing-form-actions">
+                      <button
+                        onClick={handleSavePricingItem}
+                        disabled={!pricingDeviceModel.trim() || !pricingServiceName.trim() || !pricingEstimate.trim()}
+                        className="flex-1 py-3 px-4 rounded-xl text-white font-semibold text-xs shadow-lg shadow-indigo-600/10 transition-colors disabled:opacity-40 bg-indigo-600 hover:bg-indigo-500 cursor-pointer"
+                        id="btn-save-pricing"
+                      >
+                        {editingPricingId ? "Salvar Alterações" : "Cadastrar Preço"}
+                      </button>
+                      {editingPricingId && (
+                        <button
+                          onClick={handleCancelEditPricingItem}
+                          className="py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+                          id="btn-cancel-pricing-edit"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* List and Search of Prices */}
+                <div className="lg:col-span-2 p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 space-y-6" id="pricing-list-panel">
+                  {/* Explanation box */}
+                  <div className="p-4 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 text-xs text-slate-300 leading-relaxed flex items-start gap-3" id="pricing-info-box">
+                    <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-indigo-300">Como funciona a busca de preços do Robô?</p>
+                      <p className="mt-1">
+                        Os serviços cadastrados abaixo alimentam o banco de dados interno da Inteligência Artificial. Se o cliente <strong>insistir de verdade</strong> por um valor no WhatsApp, a Gemini IA usará essas estimativas para responder de forma honesta, combinando o preço com nossa garantia e agendando uma avaliação 100% gratuita presencial!
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Search & Filters */}
+                  <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-slate-950/40 p-4 rounded-2xl border border-slate-900" id="pricing-search-section">
+                    <div className="relative w-full sm:w-72" id="pricing-search-wrapper">
+                      <input
+                        type="text"
+                        placeholder="Buscar por aparelho ou serviço..."
+                        value={pricingSearch}
+                        onChange={(e) => setPricingSearch(e.target.value)}
+                        className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                        id="input-pricing-search"
+                      />
+                      <span className="absolute left-3 top-3 text-slate-500 text-sm">🔍</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 w-full sm:w-auto" id="pricing-filters">
+                      <button
+                        onClick={() => setPricingCategoryFilter("all")}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                          pricingCategoryFilter === "all"
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/15"
+                            : "bg-slate-900 text-slate-400 hover:bg-slate-850 hover:text-slate-200"
+                        }`}
+                        id="btn-filter-pricing-all"
+                      >
+                        Todos
+                      </button>
+                      <button
+                        onClick={() => setPricingCategoryFilter("iphone")}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                          pricingCategoryFilter === "iphone"
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/15"
+                            : "bg-slate-900 text-slate-400 hover:bg-slate-850 hover:text-slate-200"
+                        }`}
+                        id="btn-filter-pricing-iphone"
+                      >
+                        iPhone
+                      </button>
+                      <button
+                        onClick={() => setPricingCategoryFilter("android")}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                          pricingCategoryFilter === "android"
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/15"
+                            : "bg-slate-900 text-slate-400 hover:bg-slate-850 hover:text-slate-200"
+                        }`}
+                        id="btn-filter-pricing-android"
+                      >
+                        Android
+                      </button>
+                      <button
+                        onClick={() => setPricingCategoryFilter("notebook")}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                          pricingCategoryFilter === "notebook"
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/15"
+                            : "bg-slate-900 text-slate-400 hover:bg-slate-850 hover:text-slate-200"
+                        }`}
+                        id="btn-filter-pricing-notebook"
+                      >
+                        Notebook
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* List items */}
+                  <div className="space-y-3.5" id="pricing-items-container">
+                    {(config.pricingTable || []).length === 0 ? (
+                      <div className="text-center py-12 text-slate-600 border border-dashed border-slate-800 rounded-2xl" id="pricing-empty-state">
+                        Nenhum serviço ou preço cadastrado ainda. Use o formulário ao lado para começar.
+                      </div>
+                    ) : (
+                      (() => {
+                        const filtered = (config.pricingTable || []).filter(item => {
+                          const matchesSearch = item.deviceModel.toLowerCase().includes(pricingSearch.toLowerCase()) || 
+                                                item.serviceName.toLowerCase().includes(pricingSearch.toLowerCase()) ||
+                                                (item.notes && item.notes.toLowerCase().includes(pricingSearch.toLowerCase()));
+                          const matchesCategory = pricingCategoryFilter === "all" || item.category === pricingCategoryFilter;
+                          return matchesSearch && matchesCategory;
+                        });
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="text-center py-12 text-slate-600" id="pricing-no-results">
+                              Nenhum serviço correspondente à busca ou filtro encontrado.
+                            </div>
+                          );
+                        }
+
+                        return filtered.map((item) => {
+                          let badgeText = "iPhone";
+                          let badgeColor = "bg-sky-500/10 text-sky-400 border border-sky-500/20";
+                          if (item.category === 'android') {
+                            badgeText = "Android";
+                            badgeColor = "bg-lime-500/10 text-lime-400 border border-lime-500/20";
+                          } else if (item.category === 'notebook') {
+                            badgeText = "Notebook";
+                            badgeColor = "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+                          } else if (item.category === 'other') {
+                            badgeText = "Outro";
+                            badgeColor = "bg-purple-500/10 text-purple-400 border border-purple-500/20";
+                          }
+
+                          return (
+                            <div
+                              key={item.id}
+                              className={`p-4 rounded-2xl border transition-all ${
+                                editingPricingId === item.id
+                                  ? "bg-indigo-600/10 border-indigo-500"
+                                  : "bg-[#131a2c]/30 border-slate-800 hover:border-slate-700"
+                              }`}
+                              id={`pricing-item-${item.id}`}
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3" id={`pricing-item-header-${item.id}`}>
+                                <div className="space-y-1.5" id={`pricing-item-details-${item.id}`}>
+                                  <div className="flex flex-wrap items-center gap-2" id={`pricing-item-title-row-${item.id}`}>
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${badgeColor}`}>
+                                      {badgeText}
+                                    </span>
+                                    <h4 className="font-semibold text-xs text-white leading-none">
+                                      {item.deviceModel}
+                                    </h4>
+                                  </div>
+                                  <p className="text-sm text-slate-200 font-medium">
+                                    {item.serviceName}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0 self-end sm:self-start" id={`pricing-item-actions-row-${item.id}`}>
+                                  <span className="text-sm font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-xl">
+                                    {item.priceEstimate}
+                                  </span>
+                                  <div className="flex gap-1" id={`pricing-item-buttons-${item.id}`}>
+                                    <button
+                                      onClick={() => handleStartEditPricingItem(item)}
+                                      className="p-2 rounded-lg bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                                      title="Editar item"
+                                      id={`btn-edit-pricing-${item.id}`}
+                                    >
+                                      📝
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeletePricingItem(item.id)}
+                                      className="p-2 rounded-lg bg-slate-900 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                                      title="Excluir item"
+                                      id={`btn-delete-pricing-${item.id}`}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                              {item.notes && (
+                                <p className="text-xs text-slate-400 mt-2 bg-[#090d16]/50 p-2.5 rounded-xl border border-slate-900/60 leading-relaxed italic" id={`pricing-item-notes-${item.id}`}>
+                                  📌 {item.notes}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        });
+                      })()
+                    )}
+                  </div>
                 </div>
               </motion.div>
             )}

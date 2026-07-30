@@ -1,0 +1,1 @@
+{ "entry": [ { "changes": [ { "value": { "messages": [ { "from": "5511999999996", "id": "testlock-2", "timestamp": "1620000031", "type": "text", "text": { "body": "Olá, tudo bem?" } } ], "contacts": [ { "profile": { "name": "Cliente Lock" } } ], "metadata": { "display_phone_number": "5511987654321", "phone_number_id": "1256883267499769" } } } ] } ] }
