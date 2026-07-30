@@ -1592,7 +1592,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
               replyText = response.text || "Ol\xE1! Desculpe, n\xE3o entendi.";
             } catch (geminiError) {
               addWebhookLog("error", "Falha no Gemini", `N\xFAmero: ${fromNumber}. Motivo: ${geminiError.message}`);
-              return;
+              replyText = "Tive uma instabilidade r\xE1pida aqui. Me confirma, por favor, o modelo do aparelho e o defeito para eu continuar seu atendimento agora.";
             }
           }
           replyText = finalizeReplyText(replyText, messageText, storedConfig);
