@@ -33,6 +33,12 @@ var import_app = require("firebase/app");
 var import_firestore = require("firebase/firestore");
 var import_meta = {};
 import_dotenv.default.config();
+process.on("uncaughtException", (err) => {
+  console.error(" [FATAL] Uncaught Exception absorvida pelo servidor:", err);
+});
+process.on("unhandledRejection", (reason, promise) => {
+  console.error(" [FATAL] Unhandled Rejection absorvida pelo servidor:", reason);
+});
 var resolvedFilename = typeof import_meta !== "undefined" && import_meta.url ? (0, import_url.fileURLToPath)(import_meta.url) : typeof __filename !== "undefined" ? __filename : process.cwd();
 var resolvedDirname = typeof import_meta !== "undefined" && import_meta.url ? import_path.default.dirname(resolvedFilename) : typeof __dirname !== "undefined" ? __dirname : process.cwd();
 var webhookLogs = [
@@ -47,6 +53,14 @@ var addWebhookLog = (direction, message, details) => {
     details
   };
   webhookLogs = [newLog, ...webhookLogs.slice(0, 99)];
+  if (db) {
+    (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "webhook_logs", newLog.id), {
+      ...newLog,
+      createdAtMs: Date.now()
+    }).catch((e) => {
+      console.warn("Failed to persist webhook log to Firestore:", e.message);
+    });
+  }
 };
 var configDir = import_path.default.join(process.cwd(), "data");
 var configFilePath = import_path.default.join(configDir, "config.json");
@@ -1203,13 +1217,39 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
       return res.status(500).json({ error: err.message });
     }
   });
-  app.get("/api/webhook/logs", (req, res) => {
+  app.get("/api/webhook/logs", async (req, res) => {
+    if (db) {
+      try {
+        const logsCol = (0, import_firestore.collection)(db, "webhook_logs");
+        const q = (0, import_firestore.query)(logsCol, (0, import_firestore.orderBy)("createdAtMs", "desc"), (0, import_firestore.limit)(100));
+        const snap = await (0, import_firestore.getDocs)(q);
+        const logs = [];
+        snap.forEach((doc2) => {
+          logs.push(doc2.data());
+        });
+        if (logs.length > 0) {
+          return res.json(logs);
+        }
+      } catch (e) {
+        console.warn("Error fetching webhook_logs from Firestore:", e.message);
+      }
+    }
     return res.json(webhookLogs);
   });
-  app.post("/api/webhook/logs/clear", (req, res) => {
+  app.post("/api/webhook/logs/clear", async (req, res) => {
     webhookLogs = [
       { id: `wlog-${Date.now()}`, timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR"), direction: "system", message: "Logs de Webhook limpos", details: "Monitor redefinido" }
     ];
+    if (db) {
+      try {
+        const logsCol = (0, import_firestore.collection)(db, "webhook_logs");
+        const snap = await (0, import_firestore.getDocs)((0, import_firestore.query)(logsCol, (0, import_firestore.limit)(100)));
+        for (const d of snap.docs) {
+          await (0, import_firestore.deleteDoc)(d.ref);
+        }
+      } catch (e) {
+      }
+    }
     return res.json({ success: true });
   });
   app.get("/api/webhook/whatsapp", async (req, res) => {
@@ -1288,8 +1328,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
         const businessPhoneNumber = value?.metadata?.display_phone_number;
         const normalizedFrom = fromNumber ? String(fromNumber).replace(/\D/g, "") : "";
         const normalizedBusiness = businessPhoneNumber ? String(businessPhoneNumber).replace(/\D/g, "") : "";
-        const normalizedConfigPhone = storedConfig?.phone ? String(storedConfig.phone).replace(/\D/g, "") : "";
-        const isOwnNumber = normalizedBusiness && normalizedFrom === normalizedBusiness || normalizedConfigPhone && normalizedFrom.slice(-8) === normalizedConfigPhone.slice(-8);
+        const isOwnNumber = normalizedBusiness && normalizedFrom === normalizedBusiness;
         if (isOwnNumber) {
           console.log(`[Loop Prevention] Message is from the business's own number (${fromNumber}). Ignoring to prevent infinite response loop.`);
           addWebhookLog("system", `Mensagem do n\xFAmero pr\xF3prio ignorada`, `Evitando loop de auto-resposta para o pr\xF3prio n\xFAmero da empresa (${fromNumber}).`);
@@ -1432,7 +1471,43 @@ ${msg.parts[0].text}`;
             if (fbResponse.ok) {
               addWebhookLog("system", `Mensagem oficial enviada via API do WhatsApp`, `Mensagem enviada com sucesso para ${fromNumber}. ID: ${fbResult.messages?.[0]?.id || "N/A"}`);
             } else {
-              addWebhookLog("error", `Falha ao enviar mensagem via API do WhatsApp`, JSON.stringify(fbResult));
+              const numStr = String(fromNumber).replace(/\D/g, "");
+              let altFrom = null;
+              if (numStr.startsWith("55") && numStr.length === 12) {
+                altFrom = numStr.slice(0, 4) + "9" + numStr.slice(4);
+              } else if (numStr.startsWith("55") && numStr.length === 13) {
+                altFrom = numStr.slice(0, 4) + numStr.slice(5);
+              }
+              if (altFrom) {
+                addWebhookLog("system", `Tentativa de envio alternativa (Regra 9\xBA d\xEDgito BR)`, `Reenviando automaticamente para formato alternativo: ${altFrom}`);
+                try {
+                  const retryRes = await fetch(`https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`, {
+                    method: "POST",
+                    headers: {
+                      "Authorization": `Bearer ${whatsappAccessToken}`,
+                      "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                      messaging_product: "whatsapp",
+                      to: altFrom,
+                      type: "text",
+                      text: {
+                        body: replyText
+                      }
+                    })
+                  });
+                  const retryResult = await retryRes.json();
+                  if (retryRes.ok) {
+                    addWebhookLog("system", `Mensagem oficial enviada (Formato BR ajustado)`, `Enviado com sucesso para ${altFrom}. ID: ${retryResult.messages?.[0]?.id || "N/A"}`);
+                  } else {
+                    addWebhookLog("error", `Falha ao enviar via API do WhatsApp (${fromNumber} e ${altFrom})`, JSON.stringify(retryResult));
+                  }
+                } catch (retryErr) {
+                  addWebhookLog("error", `Falha ao tentar reenvio para ${altFrom}`, retryErr.message);
+                }
+              } else {
+                addWebhookLog("error", `Falha ao enviar mensagem via API do WhatsApp`, JSON.stringify(fbResult));
+              }
             }
           } catch (fetchError) {
             addWebhookLog("error", `Erro na requisi\xE7\xE3o para a API do WhatsApp`, fetchError.message);
@@ -1471,6 +1546,13 @@ ${msg.parts[0].text}`;
   }
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT} (http://localhost:${PORT})`);
+    const keepAliveUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL;
+    if (keepAliveUrl) {
+      console.log(`[Keep-Alive] Configurando ping autom\xE1tico a cada 4 minutos para ${keepAliveUrl}/api/health`);
+      setInterval(() => {
+        fetch(`${keepAliveUrl}/api/health`).then((res) => console.log(`[Keep-Alive] Ping OK (${res.status})`)).catch((err) => console.warn(`[Keep-Alive] Falha no ping:`, err.message));
+      }, 4 * 60 * 1e3);
+    }
   });
 }
 startServer();
