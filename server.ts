@@ -6,10 +6,19 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, updateDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, updateDoc, query, orderBy, limit } from "firebase/firestore";
 import { spawn } from "child_process";
 
 dotenv.config();
+
+// Prevenção de quebra do servidor em produção (Render / Cloud Run) para nunca derrubar o processo Node.js
+process.on('uncaughtException', (err) => {
+  console.error(" [FATAL] Uncaught Exception absorvida pelo servidor:", err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error(" [FATAL] Unhandled Rejection absorvida pelo servidor:", reason);
+});
 
 // Safe resolution of __filename and __dirname for both ESM and CJS bundled environments
 const resolvedFilename = (typeof import.meta !== "undefined" && import.meta.url)
@@ -42,6 +51,15 @@ const addWebhookLog = (direction: WebhookLog['direction'], message: string, deta
     details
   };
   webhookLogs = [newLog, ...webhookLogs.slice(0, 99)]; // Keep last 100 webhook logs
+
+  if (db) {
+    setDoc(doc(db, "webhook_logs", newLog.id), {
+      ...newLog,
+      createdAtMs: Date.now()
+    }).catch(e => {
+      console.warn("Failed to persist webhook log to Firestore:", e.message);
+    });
+  }
 };
 
 const configDir = path.join(process.cwd(), "data");
@@ -1406,15 +1424,40 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
   });
 
   // Get webhook logs endpoint
-  app.get("/api/webhook/logs", (req, res) => {
+  app.get("/api/webhook/logs", async (req, res) => {
+    if (db) {
+      try {
+        const logsCol = collection(db, "webhook_logs");
+        const q = query(logsCol, orderBy("createdAtMs", "desc"), limit(100));
+        const snap = await getDocs(q);
+        const logs: any[] = [];
+        snap.forEach(doc => {
+          logs.push(doc.data());
+        });
+        if (logs.length > 0) {
+          return res.json(logs);
+        }
+      } catch (e: any) {
+        console.warn("Error fetching webhook_logs from Firestore:", e.message);
+      }
+    }
     return res.json(webhookLogs);
   });
 
   // Clear webhook logs endpoint
-  app.post("/api/webhook/logs/clear", (req, res) => {
+  app.post("/api/webhook/logs/clear", async (req, res) => {
     webhookLogs = [
       { id: `wlog-${Date.now()}`, timestamp: new Date().toLocaleTimeString('pt-BR'), direction: 'system', message: "Logs de Webhook limpos", details: "Monitor redefinido" }
     ];
+    if (db) {
+      try {
+        const logsCol = collection(db, "webhook_logs");
+        const snap = await getDocs(query(logsCol, limit(100)));
+        for (const d of snap.docs) {
+          await deleteDoc(d.ref);
+        }
+      } catch (e) {}
+    }
     return res.json({ success: true });
   });
 
@@ -1521,14 +1564,12 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
           return;
         }
 
-        // 4. Loop Prevention: Check if the message is from the business itself
+        // 4. Loop Prevention: Check if the message is from the business itself (the WhatsApp API number)
         const businessPhoneNumber = value?.metadata?.display_phone_number;
         const normalizedFrom = fromNumber ? String(fromNumber).replace(/\D/g, "") : "";
         const normalizedBusiness = businessPhoneNumber ? String(businessPhoneNumber).replace(/\D/g, "") : "";
-        const normalizedConfigPhone = storedConfig?.phone ? String(storedConfig.phone).replace(/\D/g, "") : "";
 
-        const isOwnNumber = (normalizedBusiness && normalizedFrom === normalizedBusiness) || 
-                            (normalizedConfigPhone && normalizedFrom.slice(-8) === normalizedConfigPhone.slice(-8));
+        const isOwnNumber = (normalizedBusiness && normalizedFrom === normalizedBusiness);
 
         if (isOwnNumber) {
           console.log(`[Loop Prevention] Message is from the business's own number (${fromNumber}). Ignoring to prevent infinite response loop.`);
@@ -1703,7 +1744,47 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
             if (fbResponse.ok) {
               addWebhookLog('system', `Mensagem oficial enviada via API do WhatsApp`, `Mensagem enviada com sucesso para ${fromNumber}. ID: ${fbResult.messages?.[0]?.id || "N/A"}`);
             } else {
-              addWebhookLog('error', `Falha ao enviar mensagem via API do WhatsApp`, JSON.stringify(fbResult));
+              // Retry automático para números do Brasil (DDD + 8 ou 9 dígitos) - regra do 9º dígito no Meta Graph API
+              const numStr = String(fromNumber).replace(/\D/g, "");
+              let altFrom: string | null = null;
+              if (numStr.startsWith("55") && numStr.length === 12) {
+                // Inserir o 9 após o DDD (55 + 2 DDD + 9 + 8 dígitos)
+                altFrom = numStr.slice(0, 4) + '9' + numStr.slice(4);
+              } else if (numStr.startsWith("55") && numStr.length === 13) {
+                // Remover o 9 após o DDD (55 + 2 DDD + 8 dígitos)
+                altFrom = numStr.slice(0, 4) + numStr.slice(5);
+              }
+
+              if (altFrom) {
+                addWebhookLog('system', `Tentativa de envio alternativa (Regra 9º dígito BR)`, `Reenviando automaticamente para formato alternativo: ${altFrom}`);
+                try {
+                  const retryRes = await fetch(`https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${whatsappAccessToken}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      messaging_product: "whatsapp",
+                      to: altFrom,
+                      type: "text",
+                      text: {
+                        body: replyText
+                      }
+                    })
+                  });
+                  const retryResult = await retryRes.json();
+                  if (retryRes.ok) {
+                    addWebhookLog('system', `Mensagem oficial enviada (Formato BR ajustado)`, `Enviado com sucesso para ${altFrom}. ID: ${retryResult.messages?.[0]?.id || "N/A"}`);
+                  } else {
+                    addWebhookLog('error', `Falha ao enviar via API do WhatsApp (${fromNumber} e ${altFrom})`, JSON.stringify(retryResult));
+                  }
+                } catch (retryErr: any) {
+                  addWebhookLog('error', `Falha ao tentar reenvio para ${altFrom}`, retryErr.message);
+                }
+              } else {
+                addWebhookLog('error', `Falha ao enviar mensagem via API do WhatsApp`, JSON.stringify(fbResult));
+              }
             }
           } catch (fetchError: any) {
             addWebhookLog('error', `Erro na requisição para a API do WhatsApp`, fetchError.message);
@@ -1746,6 +1827,17 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT} (http://localhost:${PORT})`);
+
+    // Auto Keep-Alive: evita que o servidor entre em repouso (sleep) no Render / nuvens
+    const keepAliveUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL;
+    if (keepAliveUrl) {
+      console.log(`[Keep-Alive] Configurando ping automático a cada 4 minutos para ${keepAliveUrl}/api/health`);
+      setInterval(() => {
+        fetch(`${keepAliveUrl}/api/health`)
+          .then(res => console.log(`[Keep-Alive] Ping OK (${res.status})`))
+          .catch(err => console.warn(`[Keep-Alive] Falha no ping:`, err.message));
+      }, 4 * 60 * 1000);
+    }
   });
 }
 

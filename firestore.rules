@@ -20,6 +20,11 @@ service cloud.firestore {
     match /whatsapp_history/{fromNumber} {
       allow read, write: if true;
     }
+
+    // Enable reading and writing Webhook logs for persistence in dashboard
+    match /webhook_logs/{logId} {
+      allow read, write: if true;
+    }
     
     // Default deny for everything else
     match /{document=**} {
