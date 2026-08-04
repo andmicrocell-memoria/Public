@@ -323,14 +323,22 @@ async function getWhatsAppHistory(fromNumber) {
   }
   return inMemoryHistoryCache[cleanNumber] || [];
 }
-async function saveWhatsAppHistory(fromNumber, messages) {
+async function saveWhatsAppHistory(fromNumber, messages, customerName) {
   const cleanNumber = String(fromNumber).replace(/\D/g, "");
   if (!cleanNumber) return;
   const sliced = messages.slice(-15);
+  const docData = {
+    messages: sliced,
+    customerPhone: cleanNumber,
+    lastUpdated: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  if (customerName) {
+    docData.customerName = customerName;
+  }
   if (db) {
     try {
       const historyDocRef = (0, import_firestore.doc)(db, "whatsapp_history", cleanNumber);
-      await (0, import_firestore.setDoc)(historyDocRef, { messages: sliced });
+      await (0, import_firestore.setDoc)(historyDocRef, docData, { merge: true });
     } catch (e) {
       console.error(`Error saving WhatsApp history to Firestore for ${cleanNumber}:`, e.message);
     }
@@ -338,11 +346,97 @@ async function saveWhatsAppHistory(fromNumber, messages) {
   try {
     ensureConfigDir();
     const historyFilePath = import_path.default.join(configDir, `history_${cleanNumber}.json`);
-    import_fs.default.writeFileSync(historyFilePath, JSON.stringify({ messages: sliced }, null, 2), "utf8");
+    let existingData = {};
+    if (import_fs.default.existsSync(historyFilePath)) {
+      try {
+        existingData = JSON.parse(import_fs.default.readFileSync(historyFilePath, "utf8"));
+      } catch (e) {
+      }
+    }
+    const mergedLocal = { ...existingData, ...docData };
+    import_fs.default.writeFileSync(historyFilePath, JSON.stringify(mergedLocal, null, 2), "utf8");
   } catch (fileErr) {
     console.error(`Error writing local backup history file for ${cleanNumber}:`, fileErr.message);
   }
   inMemoryHistoryCache[cleanNumber] = sliced;
+}
+function getStaticGreetingResponse(messageText, historyLength) {
+  if (!messageText) return null;
+  if (historyLength > 0) return null;
+  const text = messageText.trim().toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "");
+  const shortGreetings = [
+    "oi",
+    "oii",
+    "oiii",
+    "ola",
+    "ol\xE1",
+    "bom dia",
+    "boa tarde",
+    "boa noite",
+    "tudo bem",
+    "tudo bem?",
+    "opa",
+    "salve",
+    "ol\xE1 bom dia",
+    "ol\xE1 boa tarde",
+    "ol\xE1 boa noite",
+    "oi bom dia",
+    "oi boa tarde",
+    "oi boa noite",
+    "opa tudo bem",
+    "tem algu\xE9m a\xED",
+    "tem algu\xE9m",
+    "atendimento",
+    "suporte",
+    "ol\xE1!",
+    "oi!",
+    "bom dia!",
+    "boa tarde!",
+    "boa noite!"
+  ];
+  const isDirectGreeting = shortGreetings.includes(text) || shortGreetings.some((g) => text.startsWith(g) && text.length <= g.length + 3);
+  const techKeywords = [
+    "conserto",
+    "formata\xE7\xE3o",
+    "formatar",
+    "tela",
+    "bateria",
+    "celular",
+    "iphone",
+    "placa",
+    "notebook",
+    "conector",
+    "sensor",
+    "camera",
+    "c\xE2mera",
+    "carregar",
+    "v\xEDcio",
+    "viciado",
+    "viciada",
+    "valor",
+    "pre\xE7o",
+    "or\xE7amento",
+    "quanto",
+    "molhou",
+    "desoxida\xE7\xE3o",
+    "consertar",
+    "quebrou",
+    "trincou",
+    "parou",
+    "liga",
+    "conecta",
+    "troca",
+    "trocar",
+    "or\xE7amento",
+    "conserto",
+    "computador"
+  ];
+  const containsTech = techKeywords.some((keyword) => text.includes(keyword));
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  if ((isDirectGreeting || wordCount <= 3 && !containsTech) && !containsTech) {
+    return "Ol\xE1! Seja muito bem-vindo(a) \xE0 *Andmicrocell Solu\xE7\xF5es*! \u{1F31F}\n\nPara que eu possa te passar as informa\xE7\xF5es e estimativas de pre\xE7o de forma super r\xE1pida, por favor me envie:\n\n1\uFE0F\u20E3 O *modelo e marca* do seu aparelho (ex: Samsung A32, iPhone 11, etc.)\n2\uFE0F\u20E3 O *defeito ou problema* que ele est\xE1 apresentando\n\nAssim que voc\xEA me enviar esses detalhes, eu j\xE1 te passo as op\xE7\xF5es e valores na hora! \u{1F609}";
+  }
+  return null;
 }
 async function startServer() {
   const app = (0, import_express.default)();
@@ -359,16 +453,9 @@ async function startServer() {
   app.use(import_express.default.json({ limit: "50mb" }));
   app.use(import_express.default.urlencoded({ limit: "50mb", extended: true }));
   app.use((req, res, next) => {
-    const hostname = req.hostname || req.headers.host || "";
-    const isAiStudio = hostname.includes("run.app") || hostname.includes("localhost") || hostname.includes("127.0.0.1") || hostname.includes("stackblitz");
-    if (!isAiStudio) {
-      const isWebhook = req.path.startsWith("/api/webhook/whatsapp");
-      const isPublicApi = req.path.startsWith("/api/health") || req.path.startsWith("/api/blog") || req.path.startsWith("/api/site") || req.path.startsWith("/api/posts");
-      if (isWebhook || isPublicApi) {
-        return next();
-      }
-      console.log(`[Seguran\xE7a] Bloqueando acesso externo de ${hostname} para a rota ${req.path}. Redirecionando para site institucional.`);
-      return res.redirect(302, "https://www.andmicrocell.com.br");
+    const cleanPath = req.path.replace(/\/$/, "");
+    if (cleanPath === "/webhook") {
+      req.url = "/api/webhook/whatsapp";
     }
     next();
   });
@@ -485,6 +572,15 @@ R: ${f.answer}`).join("\n\n") : "Nenhuma cadastrada.";
 - Aparelho/Modelo: Celulares (Geral) | Servi\xE7o: Desoxida\xE7\xE3o Qu\xEDmica Profissional (Aparelhos molhados) | Estimativa de Pre\xE7o: A partir de R$ 120 (Notas: Processo de lavagem qu\xEDmica em cuba ultrass\xF4nica para remover oxida\xE7\xF5es.)`;
     const brazilTime = getBrazilDateTime();
     const brazilStatus = getBrazilStatus();
+    const formattingPricesText = `
+Tabela de Pre\xE7os - Formata\xE7\xE3o e Backup (PCs e Notebooks):
+- Formata\xE7\xE3o Simples (sem backup de arquivos): R$ 90,00
+- Formata\xE7\xE3o com Backup de at\xE9 70 GB: R$ 110,00
+- Formata\xE7\xE3o com Backup de 70 GB a 200 GB: R$ 120,00
+- Formata\xE7\xE3o com Backup de 200 GB a 400 GB: R$ 160,00
+- Formata\xE7\xE3o com Backup de 400 GB a 600 GB: R$ 190,00
+- Formata\xE7\xE3o com Backup de 600 GB a 1000 GB (1 TB): R$ 230,00
+`;
     return `Voc\xEA \xE9 o assistente inteligente de intelig\xEAncia artificial da empresa "${name}".
 Voc\xEA est\xE1 respons\xE1vel por automatizar as conversas do WhatsApp da empresa, que atua no segmento de "${category}".
 O tom de voz da sua comunica\xE7\xE3o deve ser estritamente: ${tone} (use uma abordagem acolhedora, profissional, \xE1gil e muito atenciosa).
@@ -497,34 +593,81 @@ Informa\xE7\xF5es importantes da empresa:
 - Hor\xE1rio de Funcionamento: ${businessHours || "Segunda a Sexta: 08h \xE0s 12h e das 14h \xE0s 18h | S\xE1bados: 09h \xE0s 13h"}
 - Ofertas/Promo\xE7\xF5es Ativas: ${specialOffers || "Nenhuma no momento"}
 
-PORTF\xD3LIO DE SERVI\xC7OS E REGRAS DE POSICIONAMENTO COMERCIAL (CR\xCDTICO):
-1. Alta Especialidade em Smartphones e iPhones (Servi\xE7os Avan\xE7ados): Somos especialistas de alt\xEDssimo n\xEDvel em manuten\xE7\xE3o de smartphones, com foco especial na linha Apple (iPhone). Nosso laborat\xF3rio possui ferramental especializado de ponta para realizar procedimentos complexos:
-   - Trocas de telas e baterias com t\xE9cnicas avan\xE7adas para preservar os recursos originais.
-   - Reparos l\xF3gicos avan\xE7ados em placas eletr\xF4nicas por micro-soldagem (diagn\xF3stico e micro-soldagem em circuitos integrados, curtos-circuitos, aparelhos que n\xE3o ligam ou com falhas de sinal/carga) exclusivos para smartphones, cobrindo tanto iPhones quanto aparelhos Android de qualquer marca (Samsung, Motorola, Xiaomi, etc.).
-   - IMPORTANTE (Troca de Vidro): N\xC3O realizamos o servi\xE7o de troca exclusiva de vidro da tela no momento (nem para iPhone, nem para Android). Se o cliente perguntar por troca de vidro, explique educadamente que trabalhamos com a substitui\xE7\xE3o do m\xF3dulo completo de tela premium (que garante m\xE1xima qualidade e durabilidade padr\xE3o de f\xE1brica), mas fa\xE7a quest\xE3o de destacar com entusiasmo que j\xE1 estamos em fase de planejamento e viabilizando a compra dos maquin\xE1rios especiais para implantar o servi\xE7o de troca de vidro em breve na nossa assist\xEAncia!
-2. Manuten\xE7\xE3o de Notebooks e Computadores (Excelente faturamento): Oferecemos assist\xEAncia t\xE9cnica altamente qualificada para PCs convencionais, PCs Gamers de alto desempenho e Notebooks de todas as marcas (Dell, Lenovo, HP, Asus, Acer, Samsung, etc.). Realizamos:
-   - Formata\xE7\xE3o completa do sistema com backup rigoroso e seguro de todos os dados do cliente.
-   - Upgrades estrat\xE9gicos de SSD e Mem\xF3ria RAM (fazendo notebooks antigos funcionarem at\xE9 10 vezes mais r\xE1pido).
-   - Limpeza t\xE9cnica interna preventiva com desmontagem completa e aplica\xE7\xE3o de pasta t\xE9rmica de alta condutividade (essencial contra lentid\xE3o, travamentos e superaquecimento).
-   - Substitui\xE7\xE3o de telas de notebooks, teclados, baterias e conectores.
-   - Restaura\xE7\xE3o f\xEDsica de carca\xE7as e dobradi\xE7as danificadas.
-   - IMPORTANTE (Placas de Computadores): N\xC3O fazemos reparos em placas-m\xE3e de notebooks ou computadores. Nossos reparos eletr\xF4nicos de placa s\xE3o voltados \xFAnica e exclusivamente para a linha de celulares (iPhones e Androids).
-3. Conserto de Celulares Android: Realizamos troca de telas completas, troca de baterias, substitui\xE7\xE3o de conectores de carga, reparos l\xF3gicos de placa e desoxida\xE7\xE3o f\xEDsica de aparelhos de todas as marcas (Samsung, Motorola, Xiaomi, etc.).
+PORTF\xD3LIO DE SERVI\xC7OS, REGRAS DE POSICIONAMENTO COMERCIAL E DIRETRIZES DE ATENDIMENTO (BASE DE CONHECIMENTO):
 
-ZELO E SEGURAN\xC7A T\xC9CNICA (ESSENCIAL):
-- Em todos os nossos procedimentos \u2014 desde uma limpeza minuciosa em um PC Gamer avan\xE7ado at\xE9 a micro-soldagem de precis\xE3o em uma placa de celular \u2014 aplicamos t\xE9cnicas rigorosas do padr\xE3o de f\xE1brica, com total seguran\xE7a, cuidado, zelo e respeito ao equipamento do cliente. N\xF3s sabemos exatamente o que estamos fazendo e oferecemos garantia de especialista.
+1. ESCOPO DE ATENDIMENTO E DISPOSITIVOS SUPORTADOS:
+   - Smartphones / Celulares: iPhone (iOS) e Android (suporte e reparo completos).
+   - Inform\xE1tica: Notebooks e Computadores de mesa (Desktop) (suporte t\xE9cnico e manuten\xE7\xE3o).
+   - AirPods (Apple): Reparos dispon\xEDveis, mas N\xC3O divulgue ativamente. Informar/confirmar apenas se o cliente perguntar diretamente.
+   - Macbooks e outros produtos: N\xC3O prestamos suporte no momento.
 
-REGRAS DE CONVERSA\xC7\xC3O (MUITO IMPORTANTES):
-- Regra de Ouro da Receita: Se o cliente perguntar se consertamos computadores, notebooks ou celulares Android, diga imediatamente que SIM! Apresente o servi\xE7o com total confian\xE7a profissional e entusiasmo t\xE9cnico. Jamais diminua ou recuse esses servi\xE7os, pois eles s\xE3o fontes fundamentais de faturamento da nossa assist\xEAncia.
-- Qualidade de Telas e Baterias Premium: Nossas telas de reposi\xE7\xE3o s\xE3o de qualidade OLED Premium e j\xE1 v\xEAm com o recurso True Tone ativo de f\xE1brica naturalmente (sem precisar de nenhum transplante). A imagem e o toque s\xE3o perfeitos como a original. Nossas baterias Premium tamb\xE9m possuem excelente durabilidade e rendimento id\xEAnticos aos da original de f\xE1brica.
-- Diferencial T\xE9cnico Opcional (EPROM/BMS): Oferecemos um procedimento opcional de transplante do chip EEPROM original (da tela) e do controlador BMS (da bateria) para aqueles clientes mais exigentes que n\xE3o desejam ver a mensagem de aviso de "tela desconhecida" ou "bateria desconhecida" nas configura\xE7\xF5es do iOS. Como estamos no interior de Pernambuco, a grande maioria dos clientes desconhece esses termos t\xE9cnicos e quase nunca pede isso. Por isso, N\xC3O ofere\xE7a esse servi\xE7o proativamente. Sempre informe o pre\xE7o padr\xE3o da tela/bateria primeiro. Apenas mencione o transplante se o cliente demonstrar forte preocupa\xE7\xE3o com avisos de pe\xE7as nas configura\xE7\xF5es ou com a sa\xFAde da bateria. Explique de maneira simples: "fazemos um procedimento opcional de transfer\xEAncia do chip original do seu aparelho para manter todas as fun\xE7\xF5es 100% ativas e sem nenhuma mensagem de aviso no sistema". Este servi\xE7o de alta precis\xE3o \xE9 opcional e tem um custo adicional de aproximadamente R$ 150 sobre o valor da troca.
-- Garantia de Qualidade Premium: Fa\xE7a quest\xE3o de enfatizar que todas as nossas telas e baterias utilizadas s\xE3o de alt\xEDssima qualidade Premium. N\xF3s somos uma empresa s\xE9ria e consolidada na regi\xE3o, por isso oferecemos total seguran\xE7a e garantias estendidas reais de 90 dias (3 meses), 180 dias (6 meses) ou at\xE9 360 dias (12 meses) dependendo da pe\xE7a selecionada pelo cliente. Garantia e zelo de verdade!
-- Estrat\xE9gia de Pre\xE7os e Visita F\xEDsica (Crucial para Convers\xE3o): Quando o cliente perguntar sobre valores ou or\xE7amentos, utilize sempre a nossa estrat\xE9gia h\xEDbrida de vendas no WhatsApp:
-  1. Gere valor primeiro: Destaque com entusiasmo a qualidade superior (Premium) da pe\xE7a, o alto zelo t\xE9cnico da nossa equipe especializada e a nossa garantia estendida de verdade.
-  2. Se o cliente insistir ou se for muito importante passar o valor, informe a estimativa ou faixa de pre\xE7o de forma transparente com base na Tabela de Pre\xE7os abaixo.
-  3. Logo em seguida, explique que o diagn\xF3stico completo e o or\xE7amento definitivo s\xE3o realizados presencialmente no nosso laborat\xF3rio de forma 100% gratuita e sem nenhum compromisso.
-  4. Conduza ativamente para a loja f\xEDsica: Convide e incentive o cliente de forma acolhedora a trazer o aparelho para avalia\xE7\xE3o ou a agendar um hor\xE1rio direto ('Gostaria de agendar um hor\xE1rio hoje ou prefere dar uma passada aqui \xE0 tarde para nosso t\xE9cnico avaliar gratuitamente para voc\xEA?'). As empresas s\xE9rias e de sucesso no mercado premium sempre priorizam construir essa rela\xE7\xE3o de confian\xE7a e atrair o cliente para o ambiente f\xEDsico da loja, onde a convers\xE3o do servi\xE7o \xE9 garantida!
-- Limite de Vidros e Placas de PC: Se perguntarem especificamente sobre "troca de vidro" de tela ou "reparo de placa de notebook/computador", decline polidamente explicando que trabalhamos apenas com a substitui\xE7\xE3o do m\xF3dulo completo de tela (mencionando que estamos trazendo o maquin\xE1rio de vidro em breve) e que nossos reparos avan\xE7ados de placas l\xF3gicas por micro-soldagem s\xE3o focados exclusivamente na linha de smartphones (iPhone e Android).
+2. TIPOS DE REPARO E LIMITA\xC7\xD5ES T\xC9CNICAS:
+   - Celulares e iPhones (iOS / Android): Realizamos reparos avan\xE7ados em placas eletr\xF4nicas por micro-soldagem.
+   - Notebooks e Computadores (Desktops): N\xC3O realizamos reparos avan\xE7ados em placas-m\xE3e por raz\xF5es t\xE9cnicas. Nossos reparos eletr\xF4nicos de placa s\xE3o voltados \xFAnica e exclusivamente para a linha de celulares.
+   - Servi\xE7os autorizados/permitidos em placas de notebooks/PCs: Troca de entrada de carga / conector DC Jack, regrava\xE7\xE3o de EPROM (BIOS) e outros reparos de componentes perif\xE9ricos/b\xE1sicos de hardware.
+
+3. REGRA DE IDENTIFICA\xC7\xC3O DE DEFEITO DE PLACA (TRIAGEM DA IA):
+   - Como a IA identifica se \xE9 problema de placa?
+     * Crit\xE9rio Principal: Verificar se o aparelho j\xE1 passou por outra assist\xEAncia t\xE9cnica especializada em reparos e se o cliente possui um laudo/diagn\xF3stico pr\xE9vio.
+     * Aten\xE7\xE3o: Se o cliente disser apenas "n\xE3o d\xE1 sinal de nada" ou "acho que \xE9 placa", orientar educadamente que pode ser outro defeito mais simples (como conector, bateria, fonte ou regrava\xE7\xE3o de EPROM) pass\xEDvel de conserto na nossa loja f\xEDsica.
+     * Orienta\xE7\xE3o ao Cliente: Mesmo que o cliente j\xE1 tenha um laudo de placa com defeito vindo de outra assist\xEAncia, ele pode trazer o equipamento para uma nova avalia\xE7\xE3o t\xE9cnica presencial gratuita e sem compromisso conosco.
+
+4. LINHA GAMER E COMPUTADORES/NOTEBOOKS:
+   - Somos altamente especialistas em Linha Gamer: fazemos manuten\xE7\xE3o preventiva e corretiva completa para PCs e Notebooks Gamer (desmontagem, limpeza, troca de pasta t\xE9rmica de prata, etc.).
+   - Software para PCs/Notebooks: Realizamos formata\xE7\xE3o, reinstala\xE7\xE3o de sistema e instala\xE7\xE3o de programas de forma profissional.
+
+5. SERVI\xC7OS DE SOFTWARE PARA CELULARES:
+   - Servi\xE7os Permitidos:
+     * Atualiza\xE7\xE3o/passagem de sistema para resolver falhas/bugs.
+     * Desbloqueio de senha da tela:
+       - Modalidade 1: Tentativa sem perda de dados.
+       - Modalidade 2: Em caso de falha da Modalidade 1 (e com autoriza\xE7\xE3o/ci\xEAncia pr\xE9via do cliente), fazemos reinstala\xE7\xE3o do sistema zerando tudo.
+       - Nota iPhone: O cliente precisa obrigatoriamente saber a senha do iCloud para reativar ap\xF3s o procedimento.
+   - N\xC3O Realizados (Estritamente Proibidos):
+     * N\xC3O fazemos remo\xE7\xE3o de Conta Google (FRP).
+     * N\xC3O fazemos remo\xE7\xE3o de Conta Xiaomi (Mi Account).
+     * N\xC3O fazemos desbloqueio Payjoy.
+
+6. RECICLAGEM E COMPRA DE APARELHOS:
+   - Doa\xE7\xE3o: Recebemos aparelhos de celular/notebook/PC para doa\xE7\xE3o e reciclagem adequada.
+   - Compra de Aparelhos: Compramos apenas se for valor simb\xF3lico/baixo (para descarte/reaproveitamento de pe\xE7as) e se tiver proced\xEAncia garantida (clientes conhecidos/da casa).
+   - N\xC3O compramos de pessoas que dizem ter "achado" o aparelho ou se estiver bloqueado/duvidoso.
+   - Conduta da IA: A IA deve encaminhar esse tipo de atendimento (sobre compra de aparelhos ou ofertas suspeitas) diretamente para o atendimento humano.
+
+7. LIMPEZA DE CONECTOR E BRINDES:
+   - Limpeza de Conector de Carga:
+     * Servi\xE7o pago e profissional (realizado em bancada sob microsc\xF3pio para preservar a integridade do pino de carga).
+     * Cortesia (Gr\xE1tis): Exclusivamente para clientes realizando servi\xE7os principais como troca de tela, bateria ou reparo de placa.
+     * Triagem da IA: Se perguntarem quanto \xE9 a limpeza de conector, a IA N\xC3O deve dar diagn\xF3stico pr\xE9vio dizendo que \xE9 "s\xF3 sujeira" (pois pode ser defeito el\xE9trico ou f\xEDsico no pr\xF3prio conector/circuito). Oriente o cliente a trazer para avalia\xE7\xE3o presencial.
+   - Brindes: Pel\xEDcula gr\xE1tis exclusivamente para quem realizar troca de tela completa do celular.
+
+8. HOR\xC1RIO DE ATENDIMENTO E SERVI\xC7O DE URG\xCANCIA (FORA DE HOR\xC1RIO / PLANT\xC3O):
+   - Hor\xE1rio de Funcionamento: Mant\xE9m o hor\xE1rio padr\xE3o de funcionamento comercial da loja.
+   - Atendimento de Urg\xEAncia / Plant\xE3o: Realizamos atendimentos fora do hor\xE1rio comercial, finais de semana ou domingos, mediante taxa/valor adicional pelo servi\xE7o de urg\xEAncia.
+   - Casos t\xEDpicos de Urg\xEAncia:
+     * Clientes vindos de outras cidades que buscam atendimento especializado de urg\xEAncia.
+     * Casos de aparelhos que ca\xEDram em l\xEDquidos (urg\xEAncia para evitar corros\xE3o avan\xE7ada na placa do aparelho).
+   - Triagem da IA: A IA pode informar sobre a possibilidade de atendimento de urg\xEAncia/fora do hor\xE1rio com taxa adicional e encaminhar o cliente diretamente para o atendimento humano confirmar a disponibilidade do t\xE9cnico de plant\xE3o.
+
+9. POL\xCDTICA PARA APARELHOS MOLHADOS / CONTATO COM L\xCDQUIDOS:
+   - Casos Gerais (\xC1gua/L\xEDquidos): Atendemos normalmente com alta prioridade e recomenda\xE7\xE3o de urg\xEAncia.
+   - Aparelhos que Ca\xEDram na Privada / Vaso Sanit\xE1rio / Esgoto / Efluentes:
+     * Regra R\xEDgida: N\xC3O realizamos manuten\xE7\xE3o nesse tipo de servi\xE7o por s\xE9rias quest\xF5es sanit\xE1rias, de higiene do laborat\xF3rio e contamina\xE7\xE3o biol\xF3gica.
+     * Exce\xE7\xF5es Raras: Apenas se a \xE1gua estava 100% limpa, mas passar\xE1 por rigorosa verifica\xE7\xE3o presencial. Se for constatado qualquer odor ou vest\xEDgio org\xE2nico/urina/fezes no momento do recebimento, o servi\xE7o \xE9 recusado e descartado imediatamente.
+     * Conduta da IA: Se a IA perceber ou o cliente mencionar que o aparelho caiu no vaso sanit\xE1rio, efluentes ou esgoto, a IA deve orientar de forma educada que n\xE3o realizamos manuten\xE7\xE3o nesse tipo de ocorr\xEAncia por normas sanit\xE1rias e de biosseguran\xE7a do laborat\xF3rio t\xE9cnico.
+
+10. PROCESSO DE ORDEM DE SERVI\xC7O (OS) E GARANTIA:
+    - Abertura de OS: Todo atendimento presencial gera uma Ordem de Servi\xE7o (OS) completa, registrando dados do cliente, modelo e relato minucioso do defeito.
+    - Garantia: Finalizado o conserto, emitimos o termo de garantia oficial do servi\xE7o realizado para total seguran\xE7a.
+
+11. SEGURAN\xC7A E TRANSPAR\xCANCIA DO LABORAT\xD3RIO (CLIENTES DESCONFIADOS):
+    - Monitoramento por C\xE2meras: Nosso laborat\xF3rio e loja possuem sistema completo de circuito interno de TV com filmagem e monitoramento cont\xEDnuo das bancadas.
+    - Clientes Desconfiados/Complicados: Se a IA identificar um cliente inseguro, desconfiado ou muito exigente quanto ao processo de reparo, ela pode e deve refor\xE7ar a transpar\xEAncia do nosso trabalho, destacando a abertura formal de OS e a seguran\xE7a do laborat\xF3rio 100% monitorado por c\xE2meras.
+
+12. QUALIDADE DE PE\xC7AS E PROCEDIMENTOS (DIFERENCIAIS):
+    - Qualidade de Telas e Baterias Premium: Nossas telas de reposi\xE7\xE3o s\xE3o de qualidade OLED Premium e j\xE1 v\xEAm com o recurso True Tone ativo de f\xE1brica naturalmente (sem precisar de nenhum transplante). A imagem e o toque s\xE3o perfeitos como a original. Nossas baterias Premium tamb\xE9m possuem excelente durabilidade e rendimento id\xEAnticos aos da original de f\xE1brica.
+    - Diferencial T\xE9cnico Opcional (EPROM/BMS): Oferecemos um procedimento opcional de transplante do chip EEPROM original (da tela) e do controlador BMS (da bateria) para aqueles clientes mais exigentes que n\xE3o desejam ver a mensagem de aviso de "tela desconhecida" ou "bateria desconhecida" nas configura\xE7\xF5es do iOS. Como estamos no interior de Pernambuco, a grande maioria dos clientes desconhece esses termos t\xE9cnicos e quase nunca pede isso. Por isso, N\xC3O ofere\xE7a esse servi\xE7o proativamente. Sempre informe o pre\xE7o padr\xE3o da tela/bateria primeiro. Apenas mencione o transplante se o cliente demonstrar forte preocupa\xE7\xE3o com avisos de pe\xE7as nas configura\xE7\xF5es ou com a sa\xFAde da bateria. Explique de maneira simples: "fazemos um procedimento opcional de transfer\xEAncia do chip original do seu aparelho para manter todas as fun\xE7\xF5es 100% ativas e sem nenhuma mensagem de aviso no sistema". Este servi\xE7o de alta precis\xE3o \xE9 opcional e tem um custo adicional de aproximadamente R$ 150 sobre o valor da troca.
+    - Troca de Vidro da Tela: N\xC3O realizamos o servi\xE7o de troca exclusiva de vidro da tela no momento. Se o cliente perguntar por troca de vidro, explique educadamente que trabalhamos com a substitui\xE7\xE3o do m\xF3dulo completo de tela premium, mas destaque que j\xE1 estamos planejando e viabilizando a compra dos maquin\xE1rios especiais para implantar o servi\xE7o de troca de vidro em breve!
 
 Data e Hora Atual de Atendimento (Fuso Hor\xE1rio de Caruaru/PE, Brasil):
 - Dia da semana: ${brazilTime.weekday}
@@ -537,26 +680,34 @@ ${faqText}
 
 Tabela de Pre\xE7os Geral de Refer\xEAncia para Or\xE7amentos (S\xD3 passe o valor se o cliente insistir ou pedir or\xE7amento espec\xEDfico, priorizando sempre a visita f\xEDsica logo em seguida):
 ${pricingText}
+${formattingPricesText}
 
 Diretrizes de Conversa\xE7\xE3o (MUITO IMPORTANTE):
-1. Estilo Bate-Papo de WhatsApp: Fale de forma extremamente curta, fluida e natural, como um ser humano conversando de verdade. Evite respostas longas, explica\xE7\xF5es gigantescas ou apresenta\xE7\xF5es corporativas formais de uma s\xF3 vez.
-2. Tamanho M\xE1ximo de Resposta: Cada mensagem enviada deve conter no m\xE1ximo 1 ou 2 par\xE1grafos curtos (e cada par\xE1grafo com apenas 1 a 2 linhas curtas). Seja o mais breve e sucinto poss\xEDvel!
-3. Uma Coisa de Cada Vez: N\xE3o jogue toda a informa\xE7\xE3o ou todas as FAQs de uma vez. V\xE1 conduzindo a conversa aos poucos. Fa\xE7a perguntas para entender a real necessidade do cliente antes de explicar tudo.
-4. Mem\xF3ria Recente: Preste muita aten\xE7\xE3o ao hist\xF3rico de mensagens anteriores. Se o cliente acabou de dizer o nome do aparelho, qual o problema ou o que ele deseja, deu continuidade e jamais repita a mesma pergunta ou pe\xE7a para ele dizer novamente.
-5. Limite de Emojis: Use no m\xE1ximo 1 ou 2 emojis por mensagem para manter a conversa amig\xE1vel mas profissional.
-6. Gerenciamento do Hor\xE1rio de Atendimento (MUITO CR\xCDTICO):
+1. Estilo Bate-Papo de WhatsApp: Fale de forma extremamente curta, direta e objetiva, exatamente como um ser humano digitaria no WhatsApp de forma r\xE1pida. Evite par\xE1grafos longos, explica\xE7\xF5es prolixas e mensagens cheias de rodeios ou tentativas for\xE7adas de engajamento em massa.
+2. Limite de Tamanho Rigoroso (CR\xCDTICO): Cada resposta enviada por voc\xEA DEVE conter no m\xE1ximo 1 ou 2 par\xE1grafos curtos, e cada par\xE1grafo deve ter no m\xE1ximo 1 ou 2 linhas curtas! Seja extremamente sucinto. Reduza seu vocabul\xE1rio ao essencial.
+3. Exemplos Pr\xE1ticos de Estilo:
+   * EXEMPLO RUIM (N\xC3O responda assim de forma alguma):
+     "Com certeza posso te dar uma estimativa! \u{1F609} Para a formata\xE7\xE3o completa, que j\xE1 inclui o backup de todos os seus dados e a otimiza\xE7\xE3o do sistema, o valor come\xE7a a partir de R$ 120. Mas olha, para te dar um valor exato e ver se seu notebook n\xE3o precisa de mais nada para ficar voando, o ideal \xE9 nosso t\xE9cnico fazer uma avalia\xE7\xE3o 100% gratuita no nosso laborat\xF3rio. Assim, voc\xEA tem um or\xE7amento super preciso e sem compromisso! Que tal trazer ele na segunda-feira, a partir das 8h? Nossa loja estar\xE1 aberta e pronta para te atender! \u{1F60A}"
+   * EXEMPLO BOM (Responda exatamente com este n\xEDvel de objetividade e rapidez):
+     "A formata\xE7\xE3o simples \xE9 R$ 90, e com backup fica a partir de R$ 110. \u{1F609}
+
+Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuita?"
+4. Uma Coisa de Cada Vez: N\xE3o entregue todas as informa\xE7\xF5es ou m\xFAltiplos caminhos de uma s\xF3 vez. Fa\xE7a perguntas curtas para entender a necessidade real do cliente passo a passo.
+5. Mem\xF3ria Recente: Preste muita aten\xE7\xE3o ao hist\xF3rico de mensagens anteriores. Se o cliente acabou de dizer o nome do aparelho, qual o problema ou o que ele deseja, d\xEA continuidade e jamais repita a mesma pergunta ou pe\xE7a para ele dizer novamente.
+6. Limite de Emojis: Use no m\xE1ximo 1 emoji por mensagem. Mensagens com m\xFAltiplos emojis parecem artificiais.
+7. Gerenciamento do Hor\xE1rio de Atendimento (MUITO CR\xCDTICO):
    O status atual de funcionamento da loja f\xEDsica \xE9: ${brazilStatus.statusMessage}.
    - Se o status indicar que a loja est\xE1 "FECHADA" (ou seja, hoje \xE9 Domingo, S\xE1bado fora do hor\xE1rio, ou dias de semana \xE0 noite/almo\xE7o):
      * Voc\xEA DEVE ser 100% transparente com o cliente. Logo nas primeiras mensagens, deixe absolutamente claro que a loja f\xEDsica est\xE1 FECHADA no momento ou que estamos fora do hor\xE1rio de expediente comercial.
      * Diga explicitamente algo amig\xE1vel como: "Ol\xE1! No momento nossa loja f\xEDsica est\xE1 fechada/fora do hor\xE1rio de atendimento, mas eu sou o assistente virtual da AndMicrocell e posso ir registrando todos os detalhes do seu aparelho para adiantar seu atendimento!"
      * Comunique com total clareza que, mesmo fora do hor\xE1rio de funcionamento comercial, voc\xEA est\xE1 ativo para dar andamento na conversa, coletar as informa\xE7\xF5es do aparelho e do problema t\xE9cnico para deixar tudo pronto no sistema.
-     * Explique que assim que a equipe t\xE9cnica retornar no primeiro hor\xE1rio \xFAtil, eles analisar\xE3o tudo para resolver, ou que voc\xEA ir\xE1 verificar com a equipe a possibilidade de um t\xE9cnico de plant\xE3o prestar um suporte especial emergencial.
-     * NUNCA deu a entender que o atendimento presencial ou final est\xE1 ativo agora se estiver FECHADA. Deixe bem n\xEDtido que a loja est\xE1 fechada, mas que o assistente virtual (voc\xEA) resolve tudo por aqui e deixa engatilhado para os t\xE9cnicos.
+     * Explique que assim que a equipe t\xE9cnica retornar no primeiro hor\xE1rio \xFAtil, eles analisar\xE3o tudo para resolver, ou que voc\xEA ir\xE1 verificar com a equipe a possibilidade de un t\xE9cnico de plant\xE3o prestar um suporte especial emergencial.
+     * NUNCA d\xEA a entender que o atendimento presencial ou final est\xE1 ativo agora se estiver FECHADA. Deixe bem n\xEDtido que a loja est\xE1 fechada, mas que o assistente virtual (voc\xEA) resolve tudo por aqui e deixa engatilhado para os t\xE9cnicos.
     - Se o status indicar que a loja est\xE1 "ABERTA":
       * Siga com o atendimento normal de expediente comercial.
-7. Honestidade e Seguran\xE7a: NUNCA invente informa\xE7\xF5es sobre pre\xE7os, servi\xE7os ou pol\xEDticas que n\xE3o estejam descritas acima. Se n\xE3o souber a resposta ou se o cliente fizer uma pergunta muito espec\xEDfica de pre\xE7o que n\xE3o conste na tabela de pre\xE7os nem na base de conhecimento, explique de forma amig\xE1vel e profissional que n\xE3o tem o valor exato no sistema e convide-o calorosamente a trazer para uma avalia\xE7\xE3o gratuita na loja ou pe\xE7a para ele aguardar um momento que um atendente humano ir\xE1 assumir o atendimento para dar todos os detalhes.
-8. Responda sempre em Portugu\xEAs do Brasil.
-9. Encerramento Objetivo da Conversa: Quando o cliente se despedir, agradecer ("Obrigado", "Valeu", "Tudo certo", "Entendido", "Tchau", "Boa noite", etc.) ou der sinais claros de que a d\xFAvida foi resolvida e o atendimento se encerrou, responda de forma final, extremamente direta, amig\xE1vel e objetiva. NUNCA fa\xE7a novas perguntas redundantes ("Posso ajudar em algo mais?") ou tente prolongar a conversa desnecessariamente. Apenas agrade\xE7a, deseje um excelente dia/noite ou agende um hor\xE1rio para ele trazer o aparelho, e encerre por ali.`;
+8. Honestidade e Seguran\xE7a: NUNCA invente informa\xE7\xF5es sobre pre\xE7os, servi\xE7os ou pol\xEDticas que n\xE3o estejam descritas acima. Se n\xE3o souber a resposta ou se o cliente fizer uma pergunta muito espec\xEDfica de pre\xE7o que n\xE3o conste na tabela de pre\xE7os nem na base de conhecimento, explique de forma amig\xE1vel e profissional que n\xE3o tem o valor exato no sistema e convide-o calorosamente a trazer para uma avalia\xE7\xE3o gratuita na loja ou pe\xE7a para ele aguardar um momento que um atendente humano ir\xE1 assumir o atendimento para dar todos os detalhes.
+9. Responda sempre em Portugu\xEAs do Brasil.
+10. Encerramento Objetivo da Conversa: Quando o cliente se despedir, agradecer ("Obrigado", "Valeu", "Tudo certo", "Entendido", "Tchau", "Boa noite", etc.) ou der sinais claros de que a d\xFAvida foi resolvida e o atendimento se encerrou, responda de forma final, extremamente direta, amig\xE1vel e objetiva. NUNCA fa\xE7a novas perguntas redundantes ("Posso ajudar em algo mais?") ou tente prolongar a conversa desnecessariamente. Apenas agrade\xE7a, deseje um excelente dia/noite ou agende um hor\xE1rio para ele trazer o aparelho, e encerre por ali.`;
   };
   app.post("/api/agent/chat", async (req, res) => {
     try {
@@ -564,8 +715,14 @@ Diretrizes de Conversa\xE7\xE3o (MUITO IMPORTANTE):
       if (!config) {
         return res.status(400).json({ error: "Configura\xE7\xE3o do agente ausente." });
       }
+      const lastUserMessage = messages[messages.length - 1]?.text || "";
+      const historyLength = messages.length - 1;
+      const staticResponse = getStaticGreetingResponse(lastUserMessage, historyLength);
+      if (staticResponse) {
+        return res.json({ text: staticResponse });
+      }
       const systemPrompt = buildSystemInstruction(config);
-      const contents = messages.map((m) => {
+      const contents = messages.slice(-6).map((m) => {
         return {
           role: m.sender === "customer" ? "user" : "model",
           parts: [{ text: m.text }]
@@ -585,17 +742,17 @@ Diretrizes de Conversa\xE7\xE3o (MUITO IMPORTANTE):
         return res.json({ text: replyText });
       } catch (geminiError) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
-        const lastUserMessage = messages[messages.length - 1]?.text?.toLowerCase() || "";
+        const lastUserMessage2 = messages[messages.length - 1]?.text?.toLowerCase() || "";
         let fallbackResponse = `Ol\xE1! Sou o assistente virtual da ${config.name}. Como posso ajudar?`;
-        if (lastUserMessage.includes("horario") || lastUserMessage.includes("hor\xE1rio") || lastUserMessage.includes("abre") || lastUserMessage.includes("fecha")) {
+        if (lastUserMessage2.includes("horario") || lastUserMessage2.includes("hor\xE1rio") || lastUserMessage2.includes("abre") || lastUserMessage2.includes("fecha")) {
           fallbackResponse = `Nosso hor\xE1rio de funcionamento \xE9: ${config.businessHours || "de segunda a sexta, das 9h \xE0s 18h"}. Ficamos muito felizes com o seu interesse!`;
-        } else if (lastUserMessage.includes("endereco") || lastUserMessage.includes("endere\xE7o") || lastUserMessage.includes("onde") || lastUserMessage.includes("localizacao") || lastUserMessage.includes("localiza\xE7\xE3o")) {
+        } else if (lastUserMessage2.includes("endereco") || lastUserMessage2.includes("endere\xE7o") || lastUserMessage2.includes("onde") || lastUserMessage2.includes("localizacao") || lastUserMessage2.includes("localiza\xE7\xE3o")) {
           fallbackResponse = config.address ? `N\xF3s estamos localizados em: ${config.address}. Venha nos visitar!` : `N\xF3s atuamos principalmente de forma digital ou com entregas diretas!`;
-        } else if (lastUserMessage.includes("preco") || lastUserMessage.includes("pre\xE7o") || lastUserMessage.includes("quanto") || lastUserMessage.includes("valor")) {
+        } else if (lastUserMessage2.includes("preco") || lastUserMessage2.includes("pre\xE7o") || lastUserMessage2.includes("quanto") || lastUserMessage2.includes("valor")) {
           fallbackResponse = `Para valores e or\xE7amentos detalhados do nosso segmento de ${config.category}, fale com nossos especialistas! O que exatamente voc\xEA procura?`;
         } else if (config.faqs && config.faqs.length > 0) {
           const matchedFaq = config.faqs.find(
-            (f) => lastUserMessage.includes(f.question.toLowerCase()) || f.question.toLowerCase().split(" ").some((word) => word.length > 4 && lastUserMessage.includes(word))
+            (f) => lastUserMessage2.includes(f.question.toLowerCase()) || f.question.toLowerCase().split(" ").some((word) => word.length > 4 && lastUserMessage2.includes(word))
           );
           if (matchedFaq) {
             fallbackResponse = matchedFaq.answer;
@@ -668,21 +825,6 @@ Coment\xE1rio: "${comment || "Sem coment\xE1rio escrito, apenas atribuiu estrela
       return res.json(config);
     }
     return res.status(404).json({ error: "Configura\xE7\xE3o n\xE3o encontrada" });
-  });
-  app.get("/api/tunnel", (req, res) => {
-    try {
-      const logPath = import_path.default.join(process.cwd(), "lt.log");
-      if (import_fs.default.existsSync(logPath)) {
-        const content = import_fs.default.readFileSync(logPath, "utf8");
-        const match = content.match(/your url is: (https:\/\/[^\s]+)/i);
-        if (match && match[1]) {
-          return res.json({ url: match[1] });
-        }
-      }
-      return res.json({ url: null });
-    } catch (err) {
-      return res.json({ url: null, error: err.message });
-    }
   });
   const handlePrivacyRequest = async (req, res) => {
     const config = await getFirebaseConfig() || { name: "AndMicrocell - Assist\xEAncia T\xE9cnica" };
@@ -1252,6 +1394,121 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
     }
     return res.json({ success: true });
   });
+  app.get("/api/whatsapp/sessions", async (req, res) => {
+    try {
+      const sessionsMap = /* @__PURE__ */ new Map();
+      if (db) {
+        try {
+          const historyCol = (0, import_firestore.collection)(db, "whatsapp_history");
+          const snap = await (0, import_firestore.getDocs)(historyCol);
+          snap.forEach((docSnap) => {
+            const data = docSnap.data();
+            const cleanNumber = docSnap.id;
+            sessionsMap.set(cleanNumber, {
+              id: `session-${cleanNumber}`,
+              customerName: data.customerName || `Cliente (+${cleanNumber})`,
+              customerPhone: `+${cleanNumber}`,
+              lastMessage: data.messages?.[data.messages.length - 1]?.text || "",
+              unreadCount: 0,
+              messages: (data.messages || []).map((m, idx) => ({
+                id: `msg-${cleanNumber}-${idx}`,
+                sender: m.role === "user" ? "customer" : "agent",
+                text: m.text,
+                timestamp: m.timestamp ? new Date(m.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""
+              }))
+            });
+          });
+        } catch (e) {
+          console.error("Error listing sessions from Firestore:", e.message);
+        }
+      }
+      try {
+        if (import_fs.default.existsSync(configDir)) {
+          const files = import_fs.default.readdirSync(configDir);
+          for (const file of files) {
+            if (file.startsWith("history_") && file.endsWith(".json")) {
+              const cleanNumber = file.replace("history_", "").replace(".json", "");
+              if (sessionsMap.has(cleanNumber)) continue;
+              const filePath = import_path.default.join(configDir, file);
+              try {
+                const fileData = JSON.parse(import_fs.default.readFileSync(filePath, "utf8"));
+                const messages = fileData.messages || [];
+                sessionsMap.set(cleanNumber, {
+                  id: `session-${cleanNumber}`,
+                  customerName: fileData.customerName || `Cliente (+${cleanNumber})`,
+                  customerPhone: `+${cleanNumber}`,
+                  lastMessage: messages[messages.length - 1]?.text || "",
+                  unreadCount: 0,
+                  messages: messages.map((m, idx) => ({
+                    id: `msg-${cleanNumber}-${idx}`,
+                    sender: m.role === "user" ? "customer" : "agent",
+                    text: m.text,
+                    timestamp: m.timestamp ? new Date(m.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""
+                  }))
+                });
+              } catch (err) {
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error listing sessions from local filesystem:", e.message);
+      }
+      return res.json(Array.from(sessionsMap.values()));
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+  app.post("/api/whatsapp/send", async (req, res) => {
+    try {
+      const { customerPhone, text } = req.body;
+      if (!customerPhone || !text) {
+        return res.status(400).json({ error: "Faltam par\xE2metros obrigat\xF3rios (customerPhone e text)." });
+      }
+      const cleanNumber = String(customerPhone).replace(/\D/g, "");
+      const config = await getFirebaseConfig();
+      if (!config) {
+        return res.status(400).json({ error: "Configura\xE7\xE3o do agente ausente." });
+      }
+      const { whatsappAccessToken, whatsappPhoneNumberId } = config;
+      const currentHistory = await getWhatsAppHistory(cleanNumber);
+      const updatedHistory = [
+        ...currentHistory,
+        { role: "model", text, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+      ];
+      await saveWhatsAppHistory(cleanNumber, updatedHistory);
+      let sentOfficially = false;
+      if (whatsappAccessToken && whatsappPhoneNumberId) {
+        try {
+          const fbResponse = await fetch(`https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${whatsappAccessToken}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              to: cleanNumber,
+              type: "text",
+              text: { body: text }
+            })
+          });
+          const fbResult = await fbResponse.json();
+          if (fbResponse.ok) {
+            sentOfficially = true;
+            addWebhookLog("system", `Mensagem manual enviada via Painel para +${cleanNumber}`, text);
+          } else {
+            console.warn("Meta API error in manual send:", fbResult);
+          }
+        } catch (err) {
+          console.error("Meta API exception in manual send:", err.message);
+        }
+      }
+      return res.json({ success: true, sentOfficially });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
   app.get("/api/webhook/whatsapp", async (req, res) => {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -1272,18 +1529,32 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
   app.post("/api/webhook/whatsapp", async (req, res) => {
     try {
       const body = req.body;
-      console.log("WhatsApp Incoming webhook:", JSON.stringify(body, null, 2));
-      const entry = body.entry?.[0];
-      const change = entry?.changes?.[0];
-      const value = change?.value;
-      const message = value?.messages?.[0];
-      if (!message) {
-        return res.status(200).send("EVENT_RECEIVED");
+      console.log("[Chatwoot Webhook] Payload recebido:", JSON.stringify(body, null, 2));
+      const event = body?.event;
+      const messageType = body?.message_type;
+      if (!body) {
+        console.warn("[Chatwoot Webhook] Corpo da requisi\xE7\xE3o vazio.");
+        return res.status(400).send("EMPTY_BODY");
       }
-      const fromNumber = message.from;
-      const messageId = message.id;
-      const messageType = message.type;
-      const customerName = value.contacts?.[0]?.profile?.name || "Cliente WhatsApp";
+      if (event !== "message_created") {
+        console.log(`[Chatwoot Webhook] Ignorando evento n\xE3o relacionado a mensagens: ${event}`);
+        return res.status(200).send("EVENT_IGNORED");
+      }
+      if (messageType !== "incoming") {
+        console.log(`[Chatwoot Webhook] Ignorando mensagem de tipo n\xE3o-incoming (evita loops): ${messageType}`);
+        return res.status(200).send("EVENT_IGNORED");
+      }
+      const rawMessageId = body.id ? String(body.id) : null;
+      const messageId = rawMessageId ? `cw-${rawMessageId}` : `cw-${Date.now()}`;
+      const messageText = body.content || "";
+      const chatwootAccountId = body.account?.id || body.account_id;
+      const chatwootConversationId = body.conversation?.id || body.conversation_id;
+      const customerName = body.sender?.name || body.contact?.name || body.conversation?.contact?.name || "Cliente Chatwoot";
+      const fromNumber = body.contact?.phone_number || body.sender?.phone_number || body.conversation?.contact?.phone_number || `cw-${chatwootConversationId}`;
+      if (!messageText || !messageText.trim()) {
+        console.log("[Chatwoot Webhook] Ignorando mensagem vazia ou sem texto.");
+        return res.status(200).send("EMPTY_MESSAGE_IGNORED");
+      }
       if (messageId) {
         if (processedMessageIds.has(messageId)) {
           console.log(`[Deduplication] Message ${messageId} already processed or currently processing (in-memory). Ignoring retry.`);
@@ -1309,52 +1580,25 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
             console.error("[Deduplication] Error checking Firestore for duplicates:", e.message);
           }
         }
-        if (messageType !== "text") {
-          addWebhookLog("system", `Mensagem ignorada de ${customerName}`, `Tipo de mensagem recebida: ${messageType}. Apenas mensagens de texto s\xE3o processadas automaticamente.`);
-          if (messageId && db) {
-            try {
-              await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
-            } catch (e) {
-            }
-          }
-          return;
-        }
-        const messageText = message.text?.body;
         const storedConfig = await getFirebaseConfig();
         if (!storedConfig) {
-          addWebhookLog("error", `Falha ao processar mensagem`, `Configura\xE7\xE3o da empresa ausente no servidor. Configure os dados no painel.`);
+          addWebhookLog("error", `Falha ao processar mensagem do Chatwoot`, `Configura\xE7\xE3o da empresa ausente no servidor. Configure os dados no painel.`);
           return;
         }
-        const businessPhoneNumber = value?.metadata?.display_phone_number;
-        const normalizedFrom = fromNumber ? String(fromNumber).replace(/\D/g, "") : "";
-        const normalizedBusiness = businessPhoneNumber ? String(businessPhoneNumber).replace(/\D/g, "") : "";
-        const isOwnNumber = normalizedBusiness && normalizedFrom === normalizedBusiness;
-        if (isOwnNumber) {
-          console.log(`[Loop Prevention] Message is from the business's own number (${fromNumber}). Ignoring to prevent infinite response loop.`);
-          addWebhookLog("system", `Mensagem do n\xFAmero pr\xF3prio ignorada`, `Evitando loop de auto-resposta para o pr\xF3prio n\xFAmero da empresa (${fromNumber}).`);
-          if (messageId && db) {
-            try {
-              await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
-            } catch (e) {
-            }
-          }
+        if (storedConfig.autoRespondWhatsApp !== true) {
+          addWebhookLog("system", `Mensagem do Chatwoot recebida (Rob\xF4 Desativado)`, `O rob\xF4 recebeu a mensagem de ${customerName}, mas n\xE3o respondeu porque o bot\xE3o "Responder Automaticamente" est\xE1 desativado nas configura\xE7\xF5es.`);
+          console.log("[Chatwoot Webhook] Responder Automaticamente est\xE1 desativado. Ignorando processamento.");
           return;
         }
-        const incomingPhoneNumberId = value?.metadata?.phone_number_id;
-        const { whatsappAccessToken, whatsappPhoneNumberId } = storedConfig;
-        if (whatsappPhoneNumberId && incomingPhoneNumberId && String(whatsappPhoneNumberId).trim() !== String(incomingPhoneNumberId).trim()) {
-          addWebhookLog("system", `Mensagem recebida para o ID de Telefone ${incomingPhoneNumberId} ignorada`, `O servidor est\xE1 configurado para responder apenas ao ID ${whatsappPhoneNumberId}. Isso evita conflitos com o n\xFAmero de teste ou outros n\xFAmeros da conta.`);
-          console.log(`Webhook ignored: incoming phone_number_id (${incomingPhoneNumberId}) does not match configured ID (${whatsappPhoneNumberId})`);
-          if (messageId && db) {
-            try {
-              await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
-            } catch (e) {
-            }
-          }
-          return;
-        }
-        if (storedConfig.autoRespondWhatsApp === false || storedConfig.autoRespondWhatsApp === "false") {
-          addWebhookLog("system", `Mensagem recebida de ${customerName}, mas Auto-Resposta est\xE1 desativada`, `O rob\xF4 n\xE3o responder\xE1 automaticamente no momento porque o Auto-WhatsApp est\xE1 desativado no painel.`);
+        const mutedPhones = storedConfig.mutedPhones || [];
+        const isMuted = mutedPhones.some((phone) => {
+          const cleanPhone = String(phone).replace(/\D/g, "");
+          const cleanFrom = String(fromNumber).replace(/\D/g, "");
+          return cleanFrom === cleanPhone || cleanFrom.endsWith(cleanPhone) || cleanPhone.endsWith(cleanFrom);
+        });
+        if (isMuted) {
+          console.log(`[Silence Mode] Contact ${fromNumber} is muted/silenced. Skipping AI response.`);
+          addWebhookLog("system", `Mensagem recebida de ${customerName} (${fromNumber}) [Silenciado]`, `O rob\xF4 est\xE1 SILENCIADO para esta conversa espec\xEDfica. O atendente humano pode responder diretamente.`);
           if (messageId && db) {
             try {
               await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), { processedAt: (/* @__PURE__ */ new Date()).toISOString() });
@@ -1375,152 +1619,114 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
             console.error("[Deduplication] Error marking message as processed in Firestore:", e.message);
           }
         }
-        addWebhookLog("inbound", `Mensagem recebida de ${customerName} (${fromNumber})`, messageText);
-        if (whatsappAccessToken && whatsappPhoneNumberId && messageId) {
-          try {
-            await fetch(`https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`, {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${whatsappAccessToken}`,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                messaging_product: "whatsapp",
-                status: "read",
-                message_id: messageId
-              })
-            });
-          } catch (readErr) {
-            console.warn("Failed to mark message as read:", readErr.message);
-          }
-        }
-        const systemInstruction = buildSystemInstruction(storedConfig);
+        addWebhookLog("inbound", `Mensagem de ${customerName} recebida via Chatwoot (Conversa #${chatwootConversationId})`, messageText);
         const history = await getWhatsAppHistory(fromNumber);
-        const contentsList = history.filter((m) => m && m.text && typeof m.text === "string" && m.text.trim()).map((m) => ({
-          role: m.role === "user" ? "user" : "model",
-          parts: [{ text: m.text.trim() }]
-        }));
-        if (messageText && typeof messageText === "string" && messageText.trim()) {
-          contentsList.push({
-            role: "user",
-            parts: [{ text: messageText.trim() }]
-          });
-        }
-        const contents = [];
-        for (const msg of contentsList) {
-          if (contents.length > 0 && contents[contents.length - 1].role === msg.role) {
-            const lastMsg = contents[contents.length - 1];
-            if (lastMsg.parts && lastMsg.parts[0] && msg.parts && msg.parts[0]) {
-              lastMsg.parts[0].text = `${lastMsg.parts[0].text}
+        const staticResponse = getStaticGreetingResponse(messageText, history.length);
+        let replyText = "";
+        if (staticResponse) {
+          replyText = staticResponse;
+          const updatedHistory = [
+            ...history,
+            { role: "user", text: messageText, timestamp: (/* @__PURE__ */ new Date()).toISOString() },
+            { role: "model", text: replyText, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+          ];
+          await saveWhatsAppHistory(fromNumber, updatedHistory, customerName);
+        } else {
+          const systemInstruction = buildSystemInstruction(storedConfig);
+          const contentsList = history.filter((m) => m && m.text && typeof m.text === "string" && m.text.trim()).slice(-6).map((m) => ({
+            role: m.role === "user" ? "user" : "model",
+            parts: [{ text: m.text.trim() }]
+          }));
+          if (messageText && typeof messageText === "string" && messageText.trim()) {
+            contentsList.push({
+              role: "user",
+              parts: [{ text: messageText.trim() }]
+            });
+          }
+          const contents = [];
+          for (const msg of contentsList) {
+            if (contents.length > 0 && contents[contents.length - 1].role === msg.role) {
+              const lastMsg = contents[contents.length - 1];
+              if (lastMsg.parts && lastMsg.parts[0] && msg.parts && msg.parts[0]) {
+                lastMsg.parts[0].text = `${lastMsg.parts[0].text}
 ${msg.parts[0].text}`;
+              }
+            } else {
+              contents.push(msg);
             }
-          } else {
-            contents.push(msg);
+          }
+          try {
+            const client = getGeminiClient();
+            const response = await client.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents,
+              config: {
+                systemInstruction,
+                temperature: 0.7
+              }
+            });
+            replyText = response.text || "Ol\xE1! Desculpe, n\xE3o entendi.";
+            const updatedHistory = [
+              ...history,
+              { role: "user", text: messageText, timestamp: (/* @__PURE__ */ new Date()).toISOString() },
+              { role: "model", text: replyText, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+            ];
+            await saveWhatsAppHistory(fromNumber, updatedHistory, customerName);
+          } catch (geminiError) {
+            console.warn("Fallback response used in Chatwoot webhook because Gemini failed:", geminiError.message);
+            replyText = `Ol\xE1, ${customerName}! Sou o assistente inteligente da ${storedConfig.name}. No momento, estamos processando sua mensagem. Nosso hor\xE1rio \xE9 ${storedConfig.businessHours}.`;
+            const updatedHistory = [
+              ...history,
+              { role: "user", text: messageText, timestamp: (/* @__PURE__ */ new Date()).toISOString() },
+              { role: "model", text: replyText, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+            ];
+            await saveWhatsAppHistory(fromNumber, updatedHistory, customerName);
           }
         }
-        let replyText = "";
-        try {
-          const client = getGeminiClient();
-          const response = await client.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents,
-            config: {
-              systemInstruction,
-              temperature: 0.7
-            }
-          });
-          replyText = response.text || "Ol\xE1! Desculpe, n\xE3o entendi.";
-          const updatedHistory = [
-            ...history,
-            { role: "user", text: messageText, timestamp: (/* @__PURE__ */ new Date()).toISOString() },
-            { role: "model", text: replyText, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
-          ];
-          await saveWhatsAppHistory(fromNumber, updatedHistory);
-        } catch (geminiError) {
-          console.warn("Fallback response used in webhook because Gemini failed:", geminiError.message);
-          replyText = `Ol\xE1, ${customerName}! Sou o assistente inteligente da ${storedConfig.name}. No momento, estamos processando sua mensagem. Nosso hor\xE1rio \xE9 ${storedConfig.businessHours}.`;
-          const updatedHistory = [
-            ...history,
-            { role: "user", text: messageText, timestamp: (/* @__PURE__ */ new Date()).toISOString() },
-            { role: "model", text: replyText, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
-          ];
-          await saveWhatsAppHistory(fromNumber, updatedHistory);
-        }
-        addWebhookLog("outbound", `Resposta gerada pela IA`, replyText);
-        if (whatsappAccessToken && whatsappPhoneNumberId) {
+        addWebhookLog("outbound", `Resposta gerada pela IA (Chatwoot)`, replyText);
+        const chatwootUrl = storedConfig?.chatwootUrl || "https://atendimento.andmicrocell.com.br";
+        const chatwootApiAccessToken = storedConfig?.chatwootApiAccessToken || process.env.CHATWOOT_API_ACCESS_TOKEN || "";
+        if (chatwootApiAccessToken && chatwootAccountId && chatwootConversationId) {
           const simulatedTypingMs = Math.min(Math.max(1500, replyText.length * 18), 4500);
           addWebhookLog("system", `Simulando digita\xE7\xE3o do atendente`, `Aguardando ${simulatedTypingMs}ms antes de enviar para imitar a digita\xE7\xE3o humana.`);
           await new Promise((resolve) => setTimeout(resolve, simulatedTypingMs));
           try {
-            const fbResponse = await fetch(`https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`, {
+            const cleanUrl = chatwootUrl.endsWith("/") ? chatwootUrl.slice(0, -1) : chatwootUrl;
+            const targetUrl = `${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/messages`;
+            console.log(`[Chatwoot API] Enviando resposta para ${targetUrl}`);
+            const cwResponse = await fetch(targetUrl, {
               method: "POST",
               headers: {
-                "Authorization": `Bearer ${whatsappAccessToken}`,
+                "api_access_token": chatwootApiAccessToken,
                 "Content-Type": "application/json"
               },
               body: JSON.stringify({
-                messaging_product: "whatsapp",
-                to: fromNumber,
-                type: "text",
-                text: {
-                  body: replyText
-                }
+                content: replyText,
+                message_type: "outgoing",
+                private: false
               })
             });
-            const fbResult = await fbResponse.json();
-            if (fbResponse.ok) {
-              addWebhookLog("system", `Mensagem oficial enviada via API do WhatsApp`, `Mensagem enviada com sucesso para ${fromNumber}. ID: ${fbResult.messages?.[0]?.id || "N/A"}`);
+            const cwResult = await cwResponse.json();
+            if (cwResponse.ok) {
+              addWebhookLog("system", `Mensagem enviada com sucesso via API do Chatwoot`, `Enviado para a conversa #${chatwootConversationId}.`);
             } else {
-              const numStr = String(fromNumber).replace(/\D/g, "");
-              let altFrom = null;
-              if (numStr.startsWith("55") && numStr.length === 12) {
-                altFrom = numStr.slice(0, 4) + "9" + numStr.slice(4);
-              } else if (numStr.startsWith("55") && numStr.length === 13) {
-                altFrom = numStr.slice(0, 4) + numStr.slice(5);
-              }
-              if (altFrom) {
-                addWebhookLog("system", `Tentativa de envio alternativa (Regra 9\xBA d\xEDgito BR)`, `Reenviando automaticamente para formato alternativo: ${altFrom}`);
-                try {
-                  const retryRes = await fetch(`https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`, {
-                    method: "POST",
-                    headers: {
-                      "Authorization": `Bearer ${whatsappAccessToken}`,
-                      "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                      messaging_product: "whatsapp",
-                      to: altFrom,
-                      type: "text",
-                      text: {
-                        body: replyText
-                      }
-                    })
-                  });
-                  const retryResult = await retryRes.json();
-                  if (retryRes.ok) {
-                    addWebhookLog("system", `Mensagem oficial enviada (Formato BR ajustado)`, `Enviado com sucesso para ${altFrom}. ID: ${retryResult.messages?.[0]?.id || "N/A"}`);
-                  } else {
-                    addWebhookLog("error", `Falha ao enviar via API do WhatsApp (${fromNumber} e ${altFrom})`, JSON.stringify(retryResult));
-                  }
-                } catch (retryErr) {
-                  addWebhookLog("error", `Falha ao tentar reenvio para ${altFrom}`, retryErr.message);
-                }
-              } else {
-                addWebhookLog("error", `Falha ao enviar mensagem via API do WhatsApp`, JSON.stringify(fbResult));
-              }
+              addWebhookLog("error", `Falha ao enviar mensagem via Chatwoot`, `C\xF3digo HTTP: ${cwResponse.status}. Detalhes: ${JSON.stringify(cwResult)}`);
+              console.error("[Chatwoot API Error]", cwResult);
             }
-          } catch (fetchError) {
-            addWebhookLog("error", `Erro na requisi\xE7\xE3o para a API do WhatsApp`, fetchError.message);
+          } catch (cwErr) {
+            addWebhookLog("error", `Erro ao conectar com a API do Chatwoot`, cwErr.message);
+            console.error("[Chatwoot Connection Error]", cwErr);
           }
         } else {
-          addWebhookLog("system", `Mensagem de IA pronta, mas envio oficial desativado`, `Insira as credenciais do WhatsApp Cloud API no painel de Integra\xE7\xE3o para enviar respostas oficiais diretamente.`);
+          addWebhookLog("error", `Chatwoot n\xE3o p\xF4de responder`, `Credenciais pendentes ou ausentes na configura\xE7\xE3o (Token, Account ID: ${chatwootAccountId}, Conversation ID: ${chatwootConversationId}).`);
+          console.warn("[Chatwoot] Cannot send response because credentials or IDs are missing");
         }
       })().catch((asyncErr) => {
-        console.error("Critical error in async background webhook processing:", asyncErr);
+        console.error("Critical error in async background Chatwoot webhook processing:", asyncErr);
         addWebhookLog("error", `Erro cr\xEDtico no processamento ass\xEDncrono`, asyncErr.message);
       });
     } catch (err) {
-      console.error("Error in whatsapp webhook post:", err);
+      console.error("Error in Chatwoot webhook POST:", err);
       addWebhookLog("error", `Erro cr\xEDtico no processamento do Webhook`, err.message);
       try {
         res.status(500).send("INTERNAL_SERVER_ERROR");
@@ -1530,6 +1736,25 @@ ${msg.parts[0].text}`;
   });
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", time: /* @__PURE__ */ new Date() });
+  });
+  app.get("/api/debug-status", async (req, res) => {
+    try {
+      const storedConfig = await getFirebaseConfig();
+      const hasDb = db !== null;
+      const maskedToken = storedConfig?.chatwootApiAccessToken ? `${storedConfig.chatwootApiAccessToken.substring(0, 4)}...${storedConfig.chatwootApiAccessToken.substring(storedConfig.chatwootApiAccessToken.length - 4)}` : "MISSING";
+      res.json({
+        firebaseConnected: hasDb,
+        chatwootUrl: storedConfig?.chatwootUrl || "https://atendimento.andmicrocell.com.br (DEFAULT)",
+        chatwootTokenLength: storedConfig?.chatwootApiAccessToken?.length || 0,
+        chatwootTokenMasked: maskedToken,
+        autoRespondWhatsApp: storedConfig?.autoRespondWhatsApp || false,
+        envGeminiApiKeySet: !!process.env.GEMINI_API_KEY,
+        nodeEnv: process.env.NODE_ENV,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
