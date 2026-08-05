@@ -28,7 +28,10 @@ export interface BusinessConfig {
   whatsappAccessToken?: string;
   whatsappPhoneNumberId?: string;
   whatsappVerifyToken?: string;
+  chatwootUrl?: string;
+  chatwootApiAccessToken?: string;
   pricingTable?: PricingItem[];
+  mutedPhones?: string[];
 }
 
 export interface Testimonial {
@@ -47,6 +50,9 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   status?: 'draft' | 'sent' | 'pending_approval';
+  mediaUrl?: string;
+  mediaType?: 'image' | 'audio' | 'document';
+  fileName?: string;
 }
 
 export interface ChatSession {
@@ -56,6 +62,9 @@ export interface ChatSession {
   lastMessage: string;
   unreadCount: number;
   messages: ChatMessage[];
+  tags?: string[];
+  notes?: string;
+  isReal?: boolean;
 }
 
 export interface GoogleReview {
@@ -96,15 +105,6 @@ export interface BlogPost {
  */
 export const getApiUrl = (path: string): string => {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  
-  const isCustomDomain = !window.location.hostname.includes("ais-dev") && 
-                         !window.location.hostname.includes("ais-pre") && 
-                         window.location.hostname !== "localhost" && 
-                         window.location.hostname !== "127.0.0.1";
-                         
-  if (isCustomDomain) {
-    return `https://ais-pre-77naa326rhnp4em4o227eb-516724062260.us-east1.run.app${cleanPath}`;
-  }
   return cleanPath;
 };
 

@@ -57,6 +57,58 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
   const [selectedCategory, setSelectedCategory] = useState("Todas");
   const [activePost, setActivePost] = useState<BlogPost | null>(null);
 
+  // Interactive repair estimator states
+  const [estCategory, setEstCategory] = useState<'iphone' | 'android' | 'notebook' | 'other'>('iphone');
+  const [estModel, setEstModel] = useState<string>("");
+  const [estService, setEstService] = useState<string>("");
+
+  // Filter models based on selected category in the pricing estimator
+  const availableModels = Array.from(
+    new Set(
+      (config.pricingTable || [])
+        .filter(p => p.category === estCategory)
+        .map(p => p.deviceModel)
+    )
+  );
+
+  // Filter services based on category AND model in the pricing estimator
+  const availableServices = (config.pricingTable || [])
+    .filter(p => p.category === estCategory && p.deviceModel === estModel);
+
+  // Auto-initialize first model and service when category or table changes
+  useEffect(() => {
+    const defaultModels = Array.from(
+      new Set(
+        (config.pricingTable || [])
+          .filter(p => p.category === estCategory)
+          .map(p => p.deviceModel)
+      )
+    );
+    if (defaultModels.length > 0) {
+      if (!defaultModels.includes(estModel)) {
+        setEstModel(defaultModels[0]);
+      }
+    } else {
+      setEstModel("");
+    }
+  }, [estCategory, config.pricingTable]);
+
+  useEffect(() => {
+    const services = (config.pricingTable || [])
+      .filter(p => p.category === estCategory && p.deviceModel === estModel);
+    if (services.length > 0) {
+      if (!services.some(s => s.serviceName === estService)) {
+        setEstService(services[0].serviceName);
+      }
+    } else {
+      setEstService("");
+    }
+  }, [estModel, estCategory, config.pricingTable]);
+
+  const selectedPricingItem = (config.pricingTable || []).find(
+    p => p.category === estCategory && p.deviceModel === estModel && p.serviceName === estService
+  );
+
   useEffect(() => {
     fetchPosts();
   }, []);
@@ -433,6 +485,169 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
                     <div>
                       <h4 className="font-bold text-slate-950 text-sm">Peças Premium</h4>
                       <p className="text-xs text-slate-500 mt-1 leading-normal">Trabalhamos com componentes selecionados para maior durabilidade.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Interactive Cost Estimator Section */}
+            <section className="max-w-6xl mx-auto px-4 py-8 -mt-8 relative z-10" id="repair-estimator-section">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden p-6 sm:p-10 space-y-8">
+                {/* Header */}
+                <div className="text-center space-y-2 max-w-xl mx-auto">
+                  <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-bold font-mono uppercase tracking-wider">
+                    Simulador Instantâneo
+                  </span>
+                  <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+                    Simulador de Orçamento de Reparo
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Selecione seu aparelho e o serviço desejado para ver uma estimativa de preço média na hora!
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                  {/* Stepper Form */}
+                  <div className="lg:col-span-7 space-y-6">
+                    {/* Step 1: Category selection */}
+                    <div className="space-y-2.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block">
+                        1. Tipo de Aparelho
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        {[
+                          { id: 'iphone', label: 'iPhone', icon: Smartphone },
+                          { id: 'android', label: 'Android', icon: Smartphone },
+                          { id: 'notebook', label: 'Notebook', icon: Laptop },
+                          { id: 'other', label: 'Outros', icon: Wrench }
+                        ].map((catOpt) => {
+                          const IconComp = catOpt.icon;
+                          const isSel = estCategory === catOpt.id;
+                          return (
+                            <button
+                              key={catOpt.id}
+                              onClick={() => {
+                                setEstCategory(catOpt.id as any);
+                              }}
+                              className={`p-3.5 rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-2 text-center cursor-pointer ${
+                                isSel
+                                  ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700 font-bold'
+                                  : 'border-slate-200 hover:border-slate-300 text-slate-500 hover:text-slate-800 bg-white'
+                              }`}
+                            >
+                              <IconComp className={`w-5 h-5 ${isSel ? 'text-indigo-600' : 'text-slate-400'}`} />
+                              <span className="text-xs">{catOpt.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Step 2: Model selection */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block">
+                        2. Selecione o Modelo
+                      </label>
+                      {availableModels.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">Nenhum modelo cadastrado para esta categoria.</p>
+                      ) : (
+                        <select
+                          value={estModel}
+                          onChange={(e) => setEstModel(e.target.value)}
+                          className="w-full p-3 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs focus:outline-none focus:border-indigo-500 transition-all font-medium cursor-pointer"
+                        >
+                          {availableModels.map(modelName => (
+                            <option key={modelName} value={modelName}>{modelName}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* Step 3: Service selection */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block">
+                        3. Escolha o Conserto / Serviço
+                      </label>
+                      {availableServices.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">Nenhum serviço cadastrado para este modelo.</p>
+                      ) : (
+                        <select
+                          value={estService}
+                          onChange={(e) => setEstService(e.target.value)}
+                          className="w-full p-3 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs focus:outline-none focus:border-indigo-500 transition-all font-medium cursor-pointer"
+                        >
+                          {availableServices.map(srv => (
+                            <option key={srv.id} value={srv.serviceName}>{srv.serviceName}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Estimation Card Display */}
+                  <div className="lg:col-span-5 h-full">
+                    <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-850 text-white flex flex-col justify-between h-full min-h-[300px] shadow-lg shadow-slate-900/10">
+                      <div className="space-y-5">
+                        <div className="flex items-center gap-2">
+                          <Wrench className="w-4 h-4 text-amber-500 animate-pulse" />
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-amber-500 font-mono">Preço Estimado</span>
+                        </div>
+
+                        {selectedPricingItem ? (
+                          <div className="space-y-4">
+                            <div>
+                              <p className="text-xs text-slate-400 font-medium">Aparelho Selecionado</p>
+                              <h4 className="text-sm font-extrabold text-white mt-0.5">{selectedPricingItem.deviceModel}</h4>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-slate-400 font-medium">Serviço Escolhido</p>
+                              <p className="text-xs text-slate-200 mt-0.5 font-medium">{selectedPricingItem.serviceName}</p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-slate-400 font-medium">Custo Estimado do Conserto</p>
+                              <p className="text-2xl sm:text-3xl font-black text-emerald-400 tracking-tight mt-1">
+                                {selectedPricingItem.priceEstimate}
+                              </p>
+                            </div>
+
+                            {selectedPricingItem.notes && (
+                              <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 leading-relaxed font-medium">
+                                <span className="font-bold text-amber-500 block mb-0.5">Observações Técnicas:</span>
+                                {selectedPricingItem.notes}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-4 py-6 text-center">
+                            <Smartphone className="w-8 h-8 text-slate-600 mx-auto" />
+                            <p className="text-xs text-slate-400 font-medium leading-relaxed max-w-xs mx-auto">
+                              Não encontrou seu modelo específico ou reparo na lista? Sem problemas! Nós consertamos quase qualquer aparelho.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-6 border-t border-slate-800/60 mt-6 shrink-0 font-medium">
+                        <a
+                          href={getWhatsAppLink(
+                            selectedPricingItem
+                              ? `Olá! Gostaria de agendar o conserto do meu ${selectedPricingItem.deviceModel} (${selectedPricingItem.serviceName}) pelo valor estimado de ${selectedPricingItem.priceEstimate}.`
+                              : `Olá! Gostaria de solicitar um orçamento personalizado para o meu aparelho que não encontrei na lista do site.`
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/10"
+                        >
+                          <Phone className="w-4 h-4 fill-white" />
+                          <span>Aprovar & Agendar Reparo</span>
+                        </a>
+                        <p className="text-[10px] text-slate-500 text-center mt-3 leading-relaxed font-medium">
+                          O orçamento final é confirmado presencialmente de forma gratuita antes de qualquer execução.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>

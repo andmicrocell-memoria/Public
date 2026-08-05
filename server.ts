@@ -21,13 +21,8 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Safe resolution of __filename and __dirname for both ESM and CJS bundled environments
-const resolvedFilename = (typeof import.meta !== "undefined" && import.meta.url)
-  ? fileURLToPath(import.meta.url)
-  : (typeof __filename !== "undefined" ? __filename : process.cwd());
-
-const resolvedDirname = (typeof import.meta !== "undefined" && import.meta.url)
-  ? path.dirname(resolvedFilename)
-  : (typeof __dirname !== "undefined" ? __dirname : process.cwd());
+const resolvedFilename = typeof __filename !== "undefined" ? __filename : process.cwd();
+const resolvedDirname = typeof __dirname !== "undefined" ? __dirname : process.cwd();
 
 // In-memory Webhook logs store
 interface WebhookLog {
@@ -172,18 +167,25 @@ try {
 
 // Wrapper for Firestore Config loading/saving with Local File backup/fallback
 async function getFirebaseConfig() {
+  const localConfig = loadStoredConfig() || {};
   if (db) {
     try {
       const configDocRef = doc(db, "config", "business");
       const snapshot = await getDoc(configDocRef);
       if (snapshot.exists()) {
-        return snapshot.data();
+        const firestoreData = snapshot.data();
+        return {
+          ...localConfig,
+          ...firestoreData,
+          chatwootApiAccessToken: (firestoreData.chatwootApiAccessToken || localConfig.chatwootApiAccessToken || "Q1DpLpBXSGYWVP7VGunkEkwL").trim(),
+          chatwootUrl: (firestoreData.chatwootUrl || localConfig.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim()
+        };
       }
     } catch (e: any) {
       console.error("Error reading config from Firestore:", e.message);
     }
   }
-  return loadStoredConfig(); // fallback to local JSON
+  return localConfig;
 }
 
 async function saveFirebaseConfig(config: any) {
@@ -294,9 +296,11 @@ async function runFirebaseMigrations() {
         localConfig.phone !== firestoreConfig.phone || 
         localConfig.name !== firestoreConfig.name || 
         localConfig.address !== firestoreConfig.address ||
-        localConfig.category !== firestoreConfig.category
+        localConfig.category !== firestoreConfig.category ||
+        (localConfig.chatwootApiAccessToken && localConfig.chatwootApiAccessToken !== firestoreConfig.chatwootApiAccessToken) ||
+        (localConfig.chatwootUrl && localConfig.chatwootUrl !== firestoreConfig.chatwootUrl)
       )) {
-        console.log("Local config differs from Firestore. Syncing local changes (phone/name/address/category) to Firestore...");
+        console.log("Local config differs from Firestore. Syncing local changes (including Chatwoot token/URL) to Firestore...");
         const mergedConfig = { ...firestoreConfig, ...localConfig };
         await setDoc(configDocRef, mergedConfig);
         console.log("Successfully synchronized local config changes to Firestore!");
@@ -461,7 +465,7 @@ function getStaticGreetingResponse(messageText: string, historyLength: number): 
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   // Habilitar CORS para permitir requisições do site estático no domínio customizado do cliente
   app.use((req, res, next) => {
@@ -1692,7 +1696,7 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
   });
 
   // Webhook verification endpoint (GET)
-  app.get("/api/webhook/whatsapp", async (req, res) => {
+  app.get(["/api/webhook/whatsapp", "/webhook", "/api/webhook"], async (req, res) => {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
@@ -1714,7 +1718,7 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
   });
 
   // WhatsApp / Chatwoot Webhook POST message receiver (dedicated strictly to Chatwoot flow)
-  app.post("/api/webhook/whatsapp", async (req, res) => {
+  app.post(["/api/webhook/whatsapp", "/webhook", "/api/webhook"], async (req, res) => {
     try {
       const body = req.body;
       
@@ -1838,7 +1842,40 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
 
         addWebhookLog('inbound', `Mensagem de ${customerName} recebida via Chatwoot (Conversa #${chatwootConversationId})`, messageText);
 
-        // 5. Fetch history and format it for Gemini API
+        const chatwootUrl = (storedConfig?.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim();
+        const rawToken = (storedConfig?.chatwootApiAccessToken || process.env.CHATWOOT_API_ACCESS_TOKEN || "Q1DpLpBXSGYWVP7VGunkEkwL").trim();
+        const chatwootApiAccessToken = rawToken.replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim();
+        const cleanUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
+
+        // 5. Mark message as READ immediately in Chatwoot (triggers blue double-checkmarks on WhatsApp)
+        if (chatwootApiAccessToken && chatwootAccountId && chatwootConversationId) {
+          try {
+            await fetch(`${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/update_last_seen`, {
+              method: 'POST',
+              headers: {
+                'api-access-token': chatwootApiAccessToken,
+                'Content-Type': 'application/json'
+              }
+            });
+            console.log(`[Chatwoot] Marcada como lida conversa #${chatwootConversationId} (dois tracinhos azuis).`);
+          } catch (readErr: any) {
+            console.warn("[Chatwoot] Aviso ao atualizar status de leitura:", readErr.message);
+          }
+
+          // Trigger typing indicator
+          try {
+            await fetch(`${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/toggle_typing_status`, {
+              method: 'POST',
+              headers: {
+                'api-access-token': chatwootApiAccessToken,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ typing_status: 'on' })
+            });
+          } catch (e) {}
+        }
+
+        // 6. Fetch history and format it for Gemini API
         const history = await getWhatsAppHistory(fromNumber);
         
         // Check if we should use a fast static greeting response
@@ -1887,18 +1924,37 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
             }
           }
 
-          // Run Gemini
+          // Run Gemini with multi-model fallback and auto-retry
           try {
             const client = getGeminiClient();
-            const response = await client.models.generateContent({
-              model: "gemini-2.5-flash",
-              contents,
-              config: {
-                systemInstruction,
-                temperature: 0.7,
+            const candidateModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+            let generated = false;
+
+            for (const modelName of candidateModels) {
+              try {
+                const response = await client.models.generateContent({
+                  model: modelName,
+                  contents,
+                  config: {
+                    systemInstruction,
+                    temperature: 0.7,
+                  }
+                });
+                if (response?.text) {
+                  replyText = response.text;
+                  generated = true;
+                  break;
+                }
+              } catch (modelErr: any) {
+                console.warn(`[Gemini Model ${modelName} Error] ${modelErr.message}. Trying next candidate...`);
+                // Wait briefly before trying next candidate in case of rate limit
+                await new Promise(r => setTimeout(r, 600));
               }
-            });
-            replyText = response.text || "Olá! Desculpe, não entendi.";
+            }
+
+            if (!generated) {
+              replyText = `Olá, ${customerName}! Sou o assistente da ${storedConfig.name}. Como posso te ajudar hoje? Nosso horário é ${storedConfig.businessHours}.`;
+            }
 
             const updatedHistory = [
               ...history,
@@ -1908,7 +1964,7 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
             await saveWhatsAppHistory(fromNumber, updatedHistory, customerName);
           } catch (geminiError: any) {
             console.warn("Fallback response used in Chatwoot webhook because Gemini failed:", geminiError.message);
-            replyText = `Olá, ${customerName}! Sou o assistente inteligente da ${storedConfig.name}. No momento, estamos processando sua mensagem. Nosso horário é ${storedConfig.businessHours}.`;
+            replyText = `Olá, ${customerName}! Sou o assistente inteligente da ${storedConfig.name}. Como posso te ajudar com seu aparelho hoje?`;
 
             const updatedHistory = [
               ...history,
@@ -1921,25 +1977,25 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
 
         addWebhookLog('outbound', `Resposta gerada pela IA (Chatwoot)`, replyText);
 
-        // 6. Send the response via Chatwoot API
-        const chatwootUrl = storedConfig?.chatwootUrl || "https://atendimento.andmicrocell.com.br";
-        const chatwootApiAccessToken = storedConfig?.chatwootApiAccessToken || process.env.CHATWOOT_API_ACCESS_TOKEN || "";
-
+        // 7. Send the response via Chatwoot API
         if (chatwootApiAccessToken && chatwootAccountId && chatwootConversationId) {
-          // Simulate realistic typing time
-          const simulatedTypingMs = Math.min(Math.max(1500, replyText.length * 18), 4500);
-          addWebhookLog('system', `Simulando digitação do atendente`, `Aguardando ${simulatedTypingMs}ms antes de enviar para imitar a digitação humana.`);
+          // Small natural pause before sending
+          const simulatedTypingMs = Math.min(Math.max(600, replyText.length * 8), 1800);
+          addWebhookLog('system', `Enviando resposta ao cliente`, `Aguardando ${simulatedTypingMs}ms para digitação natural.`);
           await new Promise(resolve => setTimeout(resolve, simulatedTypingMs));
 
           try {
-            const cleanUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
             const targetUrl = `${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/messages`;
             
-            console.log(`[Chatwoot API] Enviando resposta para ${targetUrl}`);
+            const maskedTokenDebug = chatwootApiAccessToken 
+              ? `${chatwootApiAccessToken.substring(0, 4)}...${chatwootApiAccessToken.substring(chatwootApiAccessToken.length - 4)} (len: ${chatwootApiAccessToken.length})`
+              : 'undefined';
+            console.log(`[Chatwoot API DEBUG] Sending to ${targetUrl} using token ${maskedTokenDebug}`);
+            
             const cwResponse = await fetch(targetUrl, {
               method: 'POST',
               headers: {
-                'api_access_token': chatwootApiAccessToken,
+                'api-access-token': chatwootApiAccessToken,
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
@@ -1949,19 +2005,42 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
               })
             });
 
-            const cwResult = await cwResponse.json();
+            const cwResult = await cwResponse.json().catch(() => ({}));
             if (cwResponse.ok) {
               addWebhookLog('system', `Mensagem enviada com sucesso via API do Chatwoot`, `Enviado para a conversa #${chatwootConversationId}.`);
             } else {
-              addWebhookLog('error', `Falha ao enviar mensagem via Chatwoot`, `Código HTTP: ${cwResponse.status}. Detalhes: ${JSON.stringify(cwResult)}`);
+              if (cwResponse.status === 401 || cwResponse.status === 403) {
+                addWebhookLog('error', `Token do Chatwoot Inválido (HTTP ${cwResponse.status})`, `O Chatwoot recusou a autenticação.`);
+              } else {
+                addWebhookLog('error', `Falha ao enviar mensagem via Chatwoot`, `Código HTTP: ${cwResponse.status}. Detalhes: ${JSON.stringify(cwResult)}`);
+              }
               console.error("[Chatwoot API Error]", cwResult);
             }
           } catch (cwErr: any) {
             addWebhookLog('error', `Erro ao conectar com a API do Chatwoot`, cwErr.message);
             console.error("[Chatwoot Connection Error]", cwErr);
+          } finally {
+            // Turn off typing indicator and mark seen
+            try {
+              await fetch(`${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/toggle_typing_status`, {
+                method: 'POST',
+                headers: {
+                  'api-access-token': chatwootApiAccessToken,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ typing_status: 'off' })
+              });
+              await fetch(`${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/update_last_seen`, {
+                method: 'POST',
+                headers: {
+                  'api-access-token': chatwootApiAccessToken,
+                  'Content-Type': 'application/json'
+                }
+              });
+            } catch (e) {}
           }
         } else {
-          addWebhookLog('error', `Chatwoot não pôde responder`, `Credenciais pendentes ou ausentes na configuração (Token, Account ID: ${chatwootAccountId}, Conversation ID: ${chatwootConversationId}).`);
+          addWebhookLog('error', `Chatwoot não pôde responder`, `Credenciais pendentes ou ausentes na configuração (Token: ${chatwootApiAccessToken ? "OK" : "AUSENTE"}, Account ID: ${chatwootAccountId}, Conversation ID: ${chatwootConversationId}).`);
           console.warn("[Chatwoot] Cannot send response because credentials or IDs are missing");
         }
       })().catch(asyncErr => {
@@ -1979,6 +2058,57 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
   // Health check endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", time: new Date() });
+  });
+
+  // Test Chatwoot connection and token validity endpoint
+  app.post("/api/chatwoot/test-connection", async (req, res) => {
+    try {
+      const { chatwootUrl, chatwootApiAccessToken } = req.body;
+      
+      if (!chatwootUrl || !chatwootApiAccessToken) {
+        return res.status(400).json({ success: false, error: "A URL do Chatwoot e o Token são obrigatórios para o teste." });
+      }
+
+      const cleanUrl = chatwootUrl.trim().endsWith('/') ? chatwootUrl.trim().slice(0, -1) : chatwootUrl.trim();
+      const rawToken = String(chatwootApiAccessToken || "").trim();
+      const token = rawToken.replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim();
+      const targetUrl = `${cleanUrl}/api/v1/profile`;
+
+      console.log(`[Chatwoot Test] Testando conexão com ${cleanUrl}/api/v1/profile`);
+
+      const response = await fetch(targetUrl, {
+        method: "GET",
+        headers: {
+          "api-access-token": token,
+          "Accept": "application/json"
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return res.json({ 
+          success: true, 
+          message: "Conexão estabelecida com sucesso!", 
+          profile: { 
+            name: data.name || "Agente/Usuário", 
+            email: data.email || "" 
+          } 
+        });
+      } else {
+        const status = response.status;
+        let errMsg = `Erro de resposta do servidor Chatwoot (Código: ${status})`;
+        if (status === 401 || status === 403) {
+          errMsg = "Token de acesso pessoal à API inválido. Por favor, cole o Token de Acesso de API obtido em 'Configurações do Perfil' no canto inferior esquerdo do seu painel Chatwoot.";
+        }
+        return res.json({ success: false, error: errMsg });
+      }
+    } catch (err: any) {
+      console.error("[Chatwoot Test Connection Exception]", err.message);
+      return res.json({ 
+        success: false, 
+        error: `Não foi possível conectar com a URL informada. Detalhes: ${err.message}. Verifique se a URL está correta (ex: https://atendimento.andmicrocell.com.br) e se sua instância está online.` 
+      });
+    }
   });
 
   // Secure diagnostic endpoint to troubleshoot production environment issues

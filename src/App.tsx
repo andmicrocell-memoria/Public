@@ -27,7 +27,21 @@ import {
   Shield,
   Info,
   BookOpen,
-  Globe
+  Globe,
+  Volume2,
+  VolumeX,
+  Search,
+  Tag,
+  FileText,
+  Paperclip,
+  Image as ImageIcon,
+  Mic,
+  Download,
+  Play,
+  Share2,
+  DollarSign,
+  TrendingUp,
+  X
 } from "lucide-react";
 import { 
   FAQ, 
@@ -143,7 +157,8 @@ export default function App() {
     testimonials: defaultTestimonialList,
     autoRespondWhatsApp: true,
     autoRespondReviews: true,
-    pricingTable: defaultPricingTableList
+    pricingTable: defaultPricingTableList,
+    mutedPhones: []
   };
 
   const defaultSessions: ChatSession[] = [
@@ -155,7 +170,9 @@ export default function App() {
       unreadCount: 1,
       messages: [
         { id: "m1", sender: "customer", text: "Olá, gostaria de saber se trocam bateria do iPhone 11?", timestamp: "18:25" }
-      ]
+      ],
+      tags: ["Orçamento", "Novo"],
+      notes: "Interessado na troca de bateria do iPhone 11 de alta capacidade. Informado o valor estimado de R$ 220,00."
     },
     {
       id: "session-2",
@@ -167,7 +184,9 @@ export default function App() {
         { id: "m2", sender: "customer", text: "Olá! Tudo bem?", timestamp: "16:10" },
         { id: "m3", sender: "agent", text: "Olá, Patrícia! Tudo ótimo por aqui e com você? Como posso te ajudar hoje?", timestamp: "16:11" },
         { id: "m4", sender: "customer", text: "Que horas vocês fecham hoje?", timestamp: "16:12" }
-      ]
+      ],
+      tags: ["Sem Resposta"],
+      notes: "Cliente perguntou o horário de funcionamento. Fechamos às 18:00."
     },
     {
       id: "session-3",
@@ -179,7 +198,9 @@ export default function App() {
         { id: "m5", sender: "customer", text: "Vocês consertam notebook que não liga?", timestamp: "14:05" },
         { id: "m6", sender: "agent", text: "Sim, Carlos! Fazemos reparo completo em notebooks de todas as marcas (telas, teclados, placa-mãe, formatação e upgrade de SSD). O orçamento é gratuito!", timestamp: "14:07" },
         { id: "m7", sender: "customer", text: "Obrigado pelas informações, amanhã levo o aparelho aí.", timestamp: "14:10" }
-      ]
+      ],
+      tags: ["Aparelho Pronto"],
+      notes: "Notebook Dell Inspiron sem ligar. Trata-se de recondicionamento de conector Jack DC e limpeza. Retirada agendada."
     }
   ];
 
@@ -252,6 +273,10 @@ export default function App() {
     return saved ? JSON.parse(saved) : defaultSessions;
   });
 
+  const [realSessions, setRealSessions] = useState<ChatSession[]>([]);
+  const [isFetchingSessions, setIsFetchingSessions] = useState(false);
+  const [sessionSource, setSessionSource] = useState<'all' | 'real' | 'simulated'>('all');
+
   const [reviews, setReviews] = useState<GoogleReview[]>(() => {
     const saved = localStorage.getItem("and_microcell_reviews");
     return saved ? JSON.parse(saved) : defaultReviews;
@@ -262,15 +287,89 @@ export default function App() {
     return saved ? JSON.parse(saved) : defaultLogs;
   });
 
+  // Mobile Web App specific states
+  const [isMobileChatOnly, setIsMobileChatOnly] = useState<boolean>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mobile_chat_only") === "true") {
+      localStorage.setItem("and_microcell_mobile_chat_only", "true");
+      return true;
+    }
+    const saved = localStorage.getItem("and_microcell_mobile_chat_only");
+    if (saved !== null) {
+      return saved === "true";
+    }
+    const isMobileDevice = typeof window !== 'undefined' && (
+      window.innerWidth <= 768 ||
+      window.matchMedia('(display-mode: standalone)').matches ||
+      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    );
+    return isMobileDevice;
+  });
+  const [mobileActiveSection, setMobileActiveSection] = useState<'list' | 'chat'>('list');
+
+  // WhatsApp Advanced states (Client-ready & CRM style)
+  const [soundNotificationActive, setSoundNotificationActive] = useState<boolean>(() => {
+    const saved = localStorage.getItem("and_microcell_sound_notification");
+    return saved !== null ? saved === "true" : true;
+  });
+  const [searchSessionQuery, setSearchSessionQuery] = useState<string>("");
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>("all");
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState<boolean>(false);
+  const [showTagMenu, setShowTagMenu] = useState<boolean>(false);
+
+  // Sound chime synthesizer using standard Web Audio API (cross-browser, lightweight, zero assets needed)
+  const playNotificationSound = () => {
+    if (!soundNotificationActive) return;
+    try {
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtxClass) return;
+      const audioCtx = new AudioCtxClass();
+      
+      const osc1 = audioCtx.createOscillator();
+      const osc2 = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      osc1.type = "sine";
+      osc2.type = "sine";
+
+      // Perfect clean double digital chime "ding-ding" (D5 followed by A5)
+      osc1.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc1.frequency.setValueAtTime(880, audioCtx.currentTime + 0.12); // A5
+
+      gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.45);
+
+      osc1.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      osc1.start();
+      osc1.stop(audioCtx.currentTime + 0.45);
+    } catch (e) {
+      console.warn("AudioContext chime failed to play:", e);
+    }
+  };
+
+  useEffect(() => {
+    localStorage.setItem("and_microcell_sound_notification", soundNotificationActive ? "true" : "false");
+  }, [soundNotificationActive]);
+
   // 3. UI State Managers
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'whatsapp' | 'google' | 'settings' | 'integration' | 'blog' | 'pricing'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'settings' | 'integration' | 'blog' | 'pricing'>('dashboard');
+  const [crmTab, setCrmTab] = useState<'profile' | 'ai_adjust'>('profile');
+  const [quickFaqQ, setQuickFaqQ] = useState("");
+  const [quickFaqA, setQuickFaqA] = useState("");
   const [isViewingPublicSite, setIsViewingPublicSite] = useState(() => {
     const isAiStudio = window.location.hostname.includes("run.app") || 
                        window.location.hostname.includes("localhost") || 
                        window.location.hostname.includes("127.0.0.1") ||
                        window.location.hostname.includes("stackblitz");
 
-    // De maneira nenhuma exibe o app zetachatia em domínios customizados (como app.andmicrocell.com.br ou www.andmicrocell.com.br)
+    // Permite que o subdomínio 'app.andmicrocell.com.br' (ou qualquer 'app.') acesse o painel administrativo
+    if (window.location.hostname.startsWith("app.")) {
+      return false;
+    }
+
+    // De maneira nenhuma exibe o painel em outros domínios customizados (como www.andmicrocell.com.br ou andmicrocell.com.br)
     if (!isAiStudio) {
       return true;
     }
@@ -330,96 +429,170 @@ export default function App() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Local form states for company profile and Chatwoot integration
+  const [localCompanyName, setLocalCompanyName] = useState("");
+  const [localCompanyCategory, setLocalCompanyCategory] = useState("");
+  const [localCompanyPhone, setLocalCompanyPhone] = useState("");
+  const [localCompanyHours, setLocalCompanyHours] = useState("");
+  const [localCompanyAddress, setLocalCompanyAddress] = useState("");
+  const [localCompanyOffers, setLocalCompanyOffers] = useState("");
+  const [localCompanyTone, setLocalCompanyTone] = useState<"professional" | "friendly" | "informal" | "enthusiastic">("friendly");
+
+  const [localChatwootUrl, setLocalChatwootUrl] = useState("");
+  const [localChatwootToken, setLocalChatwootToken] = useState("");
+
+  const [isSavingCompany, setIsSavingCompany] = useState(false);
+  const [isSavingChatwoot, setIsSavingChatwoot] = useState(false);
+  const [showSavedCompanySuccess, setShowSavedCompanySuccess] = useState(false);
+  const [showSavedChatwootSuccess, setShowSavedChatwootSuccess] = useState(false);
+  const [isTestingChatwoot, setIsTestingChatwoot] = useState(false);
+  const [chatwootTestResult, setChatwootTestResult] = useState<{ success: boolean; message: string; error?: string } | null>(null);
+
+  // Synchronize local states when the configuration has finished loading
+  useEffect(() => {
+    if (hasLoadedServerConfig) {
+      setLocalCompanyName(config.name || "");
+      setLocalCompanyCategory(config.category || "");
+      setLocalCompanyPhone(config.phone || "");
+      setLocalCompanyHours(config.businessHours || "");
+      setLocalCompanyAddress(config.address || "");
+      setLocalCompanyOffers(config.specialOffers || "");
+      setLocalCompanyTone(config.tone || "friendly");
+      setLocalChatwootUrl(config.chatwootUrl || "https://atendimento.andmicrocell.com.br");
+      setLocalChatwootToken(config.chatwootApiAccessToken || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLoadedServerConfig]);
+
+  const handleSaveCompanyDetails = () => {
+    setIsSavingCompany(true);
+    setShowSavedCompanySuccess(false);
+
+    handleSaveConfig({
+      name: localCompanyName,
+      category: localCompanyCategory,
+      phone: localCompanyPhone,
+      businessHours: localCompanyHours,
+      address: localCompanyAddress,
+      specialOffers: localCompanyOffers,
+      tone: localCompanyTone
+    });
+
+    setTimeout(() => {
+      setIsSavingCompany(false);
+      setShowSavedCompanySuccess(true);
+      setTimeout(() => setShowSavedCompanySuccess(false), 4000);
+    }, 600);
+  };
+
+  const handleSaveChatwootDetails = () => {
+    setIsSavingChatwoot(true);
+    setShowSavedChatwootSuccess(false);
+
+    const trimmedUrl = localChatwootUrl.trim();
+    const sanitizedToken = localChatwootToken.trim().replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim();
+
+    // Update local state with sanitized values too
+    setLocalChatwootUrl(trimmedUrl);
+    setLocalChatwootToken(sanitizedToken);
+
+    handleSaveConfig({
+      chatwootUrl: trimmedUrl,
+      chatwootApiAccessToken: sanitizedToken
+    });
+
+    setTimeout(() => {
+      setIsSavingChatwoot(false);
+      setShowSavedChatwootSuccess(true);
+      setTimeout(() => setShowSavedChatwootSuccess(false), 4000);
+    }, 600);
+  };
+
+  const handleTestChatwootConnection = () => {
+    setIsTestingChatwoot(true);
+    setChatwootTestResult(null);
+
+    fetch(getApiUrl("/api/chatwoot/test-connection"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chatwootUrl: localChatwootUrl,
+        chatwootApiAccessToken: localChatwootToken
+      })
+    })
+      .then(res => res.json())
+      .then(data => {
+        setIsTestingChatwoot(false);
+        if (data.success) {
+          setChatwootTestResult({
+            success: true,
+            message: `Conexão bem sucedida! Conectado como ${data.profile?.name} (${data.profile?.email}).`
+          });
+        } else {
+          setChatwootTestResult({
+            success: false,
+            message: data.error || "Falha na conexão com o Chatwoot."
+          });
+        }
+      })
+      .catch(err => {
+        setIsTestingChatwoot(false);
+        setChatwootTestResult({
+          success: false,
+          message: `Erro ao se conectar: ${err.message}`
+        });
+      });
+  };
+
+  // Sync with server on mount
   // Sync with server on mount
   useEffect(() => {
-    const isCustomDomain = !window.location.hostname.includes("ais-dev") && 
-                           !window.location.hostname.includes("ais-pre") && 
-                           window.location.hostname !== "localhost" && 
-                           window.location.hostname !== "127.0.0.1";
-
-    if (isCustomDomain) {
-      console.log("Loading config directly from Firestore client-side...");
-      const configDocRef = doc(db, "config", "business");
-      getDoc(configDocRef)
-        .then((snapshot) => {
-          if (snapshot.exists()) {
-            const serverData = snapshot.data();
-            if (serverData && serverData.name) {
-              if (serverData.faqs) {
-                serverData.faqs = serverData.faqs.map((f: any) => {
-                  if (f.id === "faq-2" && (f.answer.includes("90 dias contra") || f.answer.includes("completa de 90 dias"))) {
-                    return {
-                      ...f,
-                      answer: "Sim! Oferecemos garantia completa em todos os nossos serviços e peças substituídas. Dependendo do tipo de reparo e componente utilizado, oferecemos prazos de garantia de 90, 180 ou até 360 dias contra qualquer defeito de fabricação, assegurando total cuidado e tranquilidade para o seu aparelho."
-                    };
-                  }
-                  return f;
-                });
+    fetch(getApiUrl("/api/config?t=" + Date.now()))
+      .then(res => {
+        if (res.ok) return res.json();
+        throw new Error("No server config");
+      })
+      .then(serverData => {
+        if (serverData && serverData.name) {
+          if (serverData.faqs) {
+            serverData.faqs = serverData.faqs.map((f: any) => {
+              if (f.id === "faq-2" && (f.answer.includes("90 dias contra") || f.answer.includes("completa de 90 dias"))) {
+                return {
+                  ...f,
+                  answer: "Sim! Oferecemos garantia completa em todos os nossos serviços e peças substituídas. Dependendo do tipo de reparo e componente utilizado, oferecemos prazos de garantia de 90, 180 ou até 360 dias contra qualquer defeito de fabricação, assegurando total cuidado e tranquilidade para o seu aparelho."
+                };
               }
-              if (!serverData.testimonials || serverData.testimonials.length === 0) {
-                serverData.testimonials = defaultTestimonialList;
-              }
-              setConfig(serverData as any);
-            }
-          } else {
-            console.warn("No business config document found in Firestore, falling back to static config");
+              return f;
+            });
+          }
+          if (!serverData.testimonials || serverData.testimonials.length === 0) {
+            serverData.testimonials = defaultTestimonialList;
+          }
+          setConfig(serverData);
+        }
+        setHasLoadedServerConfig(true);
+      })
+      .catch((err) => {
+        console.warn("Using static config fallback:", err);
+        const saved = localStorage.getItem("and_microcell_config");
+        if (saved) {
+          try {
+            setConfig(JSON.parse(saved));
+          } catch (e) {
             setConfig(staticConfig as any);
           }
-          setHasLoadedServerConfig(true);
-        })
-        .catch((err) => {
-          console.error("Error loading config directly from Firestore:", err);
+        } else {
           setConfig(staticConfig as any);
-          setHasLoadedServerConfig(true);
-        });
-    } else {
-      fetch(getApiUrl("/api/config?t=" + Date.now()))
-        .then(res => {
-          if (res.ok) return res.json();
-          throw new Error("No server config");
-        })
-        .then(serverData => {
-          if (serverData && serverData.name) {
-            if (serverData.faqs) {
-              serverData.faqs = serverData.faqs.map((f: any) => {
-                if (f.id === "faq-2" && (f.answer.includes("90 dias contra") || f.answer.includes("completa de 90 dias"))) {
-                  return {
-                    ...f,
-                    answer: "Sim! Oferecemos garantia completa em todos os nossos serviços e peças substituídas. Dependendo do tipo de reparo e componente utilizado, oferecemos prazos de garantia de 90, 180 ou até 360 dias contra qualquer defeito de fabricação, assegurando total cuidado e tranquilidade para o seu aparelho."
-                  };
-                }
-                return f;
-              });
-            }
-            if (!serverData.testimonials || serverData.testimonials.length === 0) {
-              serverData.testimonials = defaultTestimonialList;
-            }
-            setConfig(serverData);
-          }
-          setHasLoadedServerConfig(true);
-        })
-        .catch((err) => {
-          console.warn("Using static config fallback:", err);
-          const saved = localStorage.getItem("and_microcell_config");
-          if (saved) {
-            try {
-              setConfig(JSON.parse(saved));
-            } catch (e) {
-              setConfig(staticConfig as any);
-            }
-          } else {
-            setConfig(staticConfig as any);
-          }
-          
-          fetch(getApiUrl("/api/config"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(config)
-          }).catch(e => console.debug("Not running on dynamic server, skipping seed"));
-          
-          setHasLoadedServerConfig(true);
-        });
-    }
+        }
+        
+        fetch(getApiUrl("/api/config"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(config)
+        }).catch(e => console.debug("Not running on dynamic server, skipping seed"));
+        
+        setHasLoadedServerConfig(true);
+      });
 
     // Fetch tunnel URL on mount
     fetch(getApiUrl("/api/tunnel?t=" + Date.now()))
@@ -437,25 +610,12 @@ export default function App() {
     if (!hasLoadedServerConfig) return;
     localStorage.setItem("and_microcell_config", JSON.stringify(config));
     
-    const isCustomDomain = !window.location.hostname.includes("ais-dev") && 
-                           !window.location.hostname.includes("ais-pre") && 
-                           window.location.hostname !== "localhost" && 
-                           window.location.hostname !== "127.0.0.1";
-
-    if (isCustomDomain) {
-      console.log("Saving config directly to Firestore client-side...");
-      const configDocRef = doc(db, "config", "business");
-      setDoc(configDocRef, config)
-        .then(() => console.log("Config saved to Firestore successfully!"))
-        .catch(err => console.error("Error saving config directly to Firestore:", err));
-    } else {
-      // Save to server
-      fetch(getApiUrl("/api/config"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config)
-      }).catch(err => console.error("Error saving server config:", err));
-    }
+    // Always save directly to the server, which then writes to Firestore safely
+    fetch(getApiUrl("/api/config"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config)
+    }).catch(err => console.error("Error saving server config:", err));
   }, [config, hasLoadedServerConfig]);
 
   useEffect(() => {
@@ -513,6 +673,32 @@ export default function App() {
       console.error("Error clearing logs:", e);
     }
   };
+
+  const fetchRealSessions = async () => {
+    setIsFetchingSessions(true);
+    try {
+      const res = await fetch(getApiUrl("/api/whatsapp/sessions?t=" + Date.now()));
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data)) {
+          setRealSessions(data);
+        }
+      }
+    } catch (e) {
+      console.error("Error fetching real WhatsApp sessions:", e);
+    } finally {
+      setIsFetchingSessions(false);
+    }
+  };
+
+  // Poll real WhatsApp sessions every 4 seconds to provide a true real-time dashboard experience
+  useEffect(() => {
+    fetchRealSessions();
+    const interval = setInterval(() => {
+      fetchRealSessions();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Poll webhook logs when in the integration tab
   useEffect(() => {
@@ -572,7 +758,36 @@ export default function App() {
       return s;
     }));
 
+    // Play chime sound
+    playNotificationSound();
+
     addLog("whatsapp_received", `Mensagem do cliente no WhatsApp`, `${currentSession.customerName}: "${textToSend.substring(0, 30)}..."`);
+
+    // Check if the chat is muted (silenced)
+    const cleanPhoneStr = currentSession.customerPhone.replace(/\D/g, "");
+    const isMuted = (config.mutedPhones || []).some(p => p.replace(/\D/g, "") === cleanPhoneStr);
+
+    if (isMuted) {
+      setTimeout(() => {
+        const systemInfoMsg: ChatMessage = {
+          id: `msg-${Date.now() + 1}`,
+          sender: "system",
+          text: "Robô Silenciado para esta conversa. O atendimento deve ser feito manualmente pelo WhatsApp.",
+          timestamp: timeStr
+        };
+        setSessions(prev => prev.map(s => {
+          if (s.id === selectedSessionId) {
+            return {
+              ...s,
+              messages: [...updatedMessages, systemInfoMsg]
+            };
+          }
+          return s;
+        }));
+        addLog("system", `Robô Silenciado para ${currentSession.customerName}`, "IA não respondeu para respeitar o silêncio configurado.");
+      }, 500);
+      return;
+    }
 
     // Prepare AI Answer
     setIsAiAnswering(true);
@@ -660,6 +875,66 @@ export default function App() {
     }
   };
 
+  const [isSendingManual, setIsSendingManual] = useState(false);
+
+  const handleSendManualMessage = async (customText?: string) => {
+    const text = customText !== undefined ? customText : whatsappInputValue;
+    if (!text.trim()) return;
+    const currentSession = combinedSessions.find(s => s.id === selectedSessionId);
+    if (!currentSession) return;
+
+    if (customText === undefined) {
+      setWhatsappInputValue("");
+    }
+    setIsSendingManual(true);
+
+    try {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const newManualMsg: ChatMessage = {
+        id: `msg-manual-${Date.now()}`,
+        sender: "agent",
+        text,
+        timestamp: timeStr
+      };
+
+      // Add optimistically to realSessions
+      setRealSessions(prev => prev.map(s => {
+        if (s.id === selectedSessionId) {
+          return {
+            ...s,
+            lastMessage: text,
+            messages: [...s.messages, newManualMsg]
+          };
+        }
+        return s;
+      }));
+
+      // Call Express manual send route
+      const response = await fetch(getApiUrl("/api/whatsapp/send"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerPhone: currentSession.customerPhone,
+          text
+        })
+      });
+
+      if (response.ok) {
+        addLog("whatsapp_sent", `Mensagem manual enviada via painel`, `Para ${currentSession.customerName}`);
+      } else {
+        console.warn("Failed to send manual WhatsApp message backend");
+      }
+      
+      // Refresh real-time sessions instantly
+      fetchRealSessions();
+    } catch (e) {
+      console.error("Error sending manual WhatsApp message:", e);
+    } finally {
+      setIsSendingManual(false);
+    }
+  };
+
   const handleApproveDraft = (msgId: string) => {
     setSessions(prev => prev.map(s => {
       if (s.id === selectedSessionId) {
@@ -694,6 +969,77 @@ export default function App() {
       return s;
     }));
     addLog("system", `Rascunho de IA descartado pelo usuário`);
+  };
+
+  const handleToggleMuteChat = () => {
+    const currentSession = sessions.find(s => s.id === selectedSessionId);
+    if (!currentSession) return;
+    const cleanPhoneStr = currentSession.customerPhone.replace(/\D/g, "");
+    const currentlyMuted = config.mutedPhones || [];
+    let updatedMuted: string[];
+    if (currentlyMuted.some(p => p.replace(/\D/g, "") === cleanPhoneStr)) {
+      updatedMuted = currentlyMuted.filter(p => p.replace(/\D/g, "") !== cleanPhoneStr);
+      addLog("system", `Robô REATIVADO para ${currentSession.customerName}`);
+    } else {
+      updatedMuted = [...currentlyMuted, cleanPhoneStr];
+      addLog("system", `Robô SILENCIADO para ${currentSession.customerName}`);
+    }
+    handleSaveConfig({ mutedPhones: updatedMuted });
+  };
+
+  const handleUpdateSessionNotes = (sessionId: string, newNotes: string) => {
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: newNotes } : s));
+    setRealSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: newNotes } : s));
+  };
+
+  const handleUpdateSessionTags = (sessionId: string, newTags: string[]) => {
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, tags: newTags } : s));
+    setRealSessions(prev => prev.map(s => s.id === sessionId ? { ...s, tags: newTags } : s));
+  };
+
+  const handleSendRichMedia = (type: "image" | "document" | "audio", mediaUrl: string, fileName: string) => {
+    const currentSession = sessions.find(s => s.id === selectedSessionId) || realSessions.find(s => s.id === selectedSessionId);
+    if (!currentSession) return;
+
+    const now = new Date();
+    const timeStr = now.toTimeString().substring(0, 5);
+    const textMsg = type === "image" ? "📷 [Imagem]" : type === "document" ? "📄 [Documento PDF]" : "🎙️ [Áudio Gravado]";
+
+    const newMsg: ChatMessage = {
+      id: `rich-${Date.now()}`,
+      sender: "agent",
+      text: textMsg,
+      timestamp: timeStr,
+      mediaUrl,
+      mediaType: type,
+      fileName
+    };
+
+    if (currentSession.isReal) {
+      setRealSessions(prev => prev.map(s => {
+        if (s.id === selectedSessionId) {
+          return {
+            ...s,
+            lastMessage: textMsg,
+            messages: [...s.messages, newMsg]
+          };
+        }
+        return s;
+      }));
+    } else {
+      setSessions(prev => prev.map(s => {
+        if (s.id === selectedSessionId) {
+          return {
+            ...s,
+            lastMessage: textMsg,
+            messages: [...s.messages, newMsg]
+          };
+        }
+        return s;
+      }));
+    }
+
+    addLog("whatsapp_sent", `Anexo (${type}) enviado via CRM`, `${currentSession.customerName}: "${fileName}"`);
   };
 
   const handleGenerateReviewReply = async (reviewId: string) => {
@@ -930,7 +1276,36 @@ export default function App() {
     addLog("whatsapp_received", `Nova conversa iniciada no WhatsApp`, `${name} (${phone})`);
   };
 
-  const selectedSession = sessions.find(s => s.id === selectedSessionId) || sessions[0];
+  // Combine real and simulated sessions
+  const combinedSessions = [
+    ...realSessions.map(s => ({ ...s, isReal: true })),
+    ...sessions.map(s => ({ ...s, isReal: false }))
+  ];
+
+  // Filter based on selected source, search query and CRM tag
+  const displayedSessions = combinedSessions.filter(s => {
+    // 1. Filter by source (real vs simulated)
+    if (sessionSource === 'real' && !s.isReal) return false;
+    if (sessionSource === 'simulated' && s.isReal) return false;
+
+    // 2. Filter by search query
+    if (searchSessionQuery.trim()) {
+      const q = searchSessionQuery.toLowerCase();
+      const matchName = s.customerName.toLowerCase().includes(q);
+      const matchPhone = s.customerPhone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) || s.customerPhone.includes(q);
+      if (!matchName && !matchPhone) return false;
+    }
+
+    // 3. Filter by tag
+    if (selectedTagFilter !== 'all') {
+      const contactTags = s.tags || [];
+      if (!contactTags.includes(selectedTagFilter)) return false;
+    }
+
+    return true;
+  });
+
+  const selectedSession = combinedSessions.find(s => s.id === selectedSessionId) || displayedSessions[0] || combinedSessions[0];
 
   if (isViewingPublicSite) {
     const isAiStudio = window.location.hostname.includes("run.app") || 
@@ -945,6 +1320,322 @@ export default function App() {
         config={config} 
         onBackToAdmin={showBackBanner ? (() => setIsViewingPublicSite(false)) : undefined} 
       />
+    );
+  }
+
+  if (isMobileChatOnly) {
+    return (
+      <div className="h-[100dvh] max-h-[100dvh] bg-[#090e17] text-slate-100 font-sans flex flex-col overflow-hidden" id="mobile-chat-app-root">
+        {/* Mobile Header */}
+        <header className="bg-[#0b101d] border-b border-slate-800/80 px-4 py-3 shrink-0 flex items-center justify-between z-50" id="mobile-header">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center shrink-0">
+              <img 
+                src={logoUrl} 
+                alt="AndMicrocell Logo" 
+                className="w-full h-full object-cover" 
+                referrerPolicy="no-referrer" 
+              />
+            </div>
+            <div className="min-w-0">
+              <h1 className="font-display font-extrabold text-sm text-white tracking-tight flex items-center gap-1.5 truncate">
+                AndMicrocell Chat 📱
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+              </h1>
+              <p className="text-[10px] text-slate-400 font-medium truncate">WhatsApp Profissional</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button 
+              onClick={fetchRealSessions}
+              disabled={isFetchingSessions}
+              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
+              title="Sincronizar Mensagens"
+            >
+              <RefreshCw className={`w-4 h-4 ${isFetchingSessions ? 'animate-spin text-indigo-400' : ''}`} />
+            </button>
+            <button
+              onClick={() => {
+                setIsMobileChatOnly(false);
+                localStorage.setItem("and_microcell_mobile_chat_only", "false");
+              }}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-300 hover:text-white cursor-pointer flex items-center gap-1"
+              title="Voltar ao Painel Geral"
+            >
+              <span>Painel</span>
+              <span className="text-xs">🖥️</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Mobile Body Content */}
+        <main className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
+          {mobileActiveSection === 'list' ? (
+            /* CONVERSATION LIST VIEW */
+            <div className="flex-1 flex flex-col min-h-0 bg-[#070b12]" id="mobile-chat-list-view">
+              {/* Quick Filters */}
+              <div className="p-2.5 bg-[#0b101d] border-b border-slate-800/60 shrink-0">
+                <div className="grid grid-cols-3 gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800/40">
+                  <button
+                    onClick={() => setSessionSource('all')}
+                    className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                      sessionSource === 'all'
+                        ? 'bg-slate-900 text-white border border-slate-800 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Todas ({combinedSessions.length})
+                  </button>
+                  <button
+                    onClick={() => setSessionSource('real')}
+                    className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                      sessionSource === 'real'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Reais ({realSessions.length})
+                  </button>
+                  <button
+                    onClick={() => setSessionSource('simulated')}
+                    className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                      sessionSource === 'simulated'
+                        ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Testes ({sessions.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* List Scroll Area */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {displayedSessions.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 text-xs font-medium">
+                    Nenhuma conversa encontrada nesta aba.
+                  </div>
+                ) : (
+                  displayedSessions.map((sess) => {
+                    const isMuted = (config.mutedPhones || []).some(
+                      p => p.replace(/\D/g, "") === sess.customerPhone.replace(/\D/g, "")
+                    );
+
+                    return (
+                      <button
+                        key={sess.id}
+                        onClick={() => {
+                          setSelectedSessionId(sess.id);
+                          setMobileActiveSection('chat');
+                          if (sess.isReal) {
+                            setRealSessions(prev => prev.map(s => s.id === sess.id ? { ...s, unreadCount: 0 } : s));
+                          } else {
+                            setSessions(prev => prev.map(s => s.id === sess.id ? { ...s, unreadCount: 0 } : s));
+                          }
+                          setTimeout(() => {
+                            chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                          }, 100);
+                        }}
+                        className="w-full p-3.5 rounded-2xl border text-left transition-all flex items-start justify-between gap-3 bg-[#0d1321]/90 border-slate-800/80 hover:bg-[#11192b] active:bg-[#151e33] cursor-pointer shadow-sm"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-xs font-bold text-slate-100 truncate">{sess.customerName}</p>
+                            
+                            {sess.isReal ? (
+                              <span className="text-[9px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shrink-0">
+                                Real
+                              </span>
+                            ) : (
+                              <span className="text-[9px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shrink-0">
+                                Teste
+                              </span>
+                            )}
+
+                            {sess.unreadCount > 0 && (
+                              <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                            )}
+                            
+                            {isMuted && (
+                              <span className="flex items-center gap-0.5 text-[9px] bg-rose-500/15 border border-rose-500/30 text-rose-400 px-1.5 py-0.5 rounded font-semibold shrink-0" title="Robô Silenciado">
+                                <VolumeX className="w-2.5 h-2.5" /> Silenciado
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">{sess.customerPhone}</p>
+                          <p className="text-xs text-slate-300 mt-1.5 truncate font-medium">{sess.lastMessage || "Sem mensagens"}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-500 shrink-0 mt-1" />
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Bottom mode indicator */}
+              <div className="p-2 bg-[#0b101d] border-t border-slate-800/60 text-center shrink-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                  Aplicativo de Celular Ativo
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* ACTIVE CHAT DIALOG VIEW */
+            <div className="flex-1 flex flex-col min-h-0 bg-[#070b12]" id="mobile-chat-dialog-view">
+              {/* Chat Header (Shrink-0 at top of flex) */}
+              <div className="p-2.5 bg-[#0b101d] border-b border-slate-800/80 flex items-center justify-between gap-2 shrink-0 z-10">
+                <div className="flex items-center gap-2 min-w-0">
+                  <button
+                    onClick={() => setMobileActiveSection('list')}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white mr-1 flex items-center gap-1 text-xs font-bold cursor-pointer shrink-0"
+                  >
+                    Voltar
+                  </button>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-white truncate">{selectedSession?.customerName}</p>
+                    <p className="text-[10px] text-slate-400 font-mono">{selectedSession?.customerPhone}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Quick Mute Toggle Right on Header */}
+                  <button
+                    onClick={async () => {
+                      if (!selectedSession) return;
+                      const cleanNumber = selectedSession.customerPhone.replace(/\D/g, "");
+                      const isCurrentlyMuted = (config.mutedPhones || []).some(p => p.replace(/\D/g, "") === cleanNumber);
+                      let newMutedList = [...(config.mutedPhones || [])];
+                      if (isCurrentlyMuted) {
+                        newMutedList = newMutedList.filter(p => p.replace(/\D/g, "") !== cleanNumber);
+                        addLog("system", `Robô Reativado para +${cleanNumber}`, "Respostas automáticas de IA liberadas.");
+                      } else {
+                        newMutedList.push(selectedSession.customerPhone);
+                        addLog("system", `Robô Silenciado para +${cleanNumber}`, "Respostas automáticas desativadas temporariamente.");
+                      }
+                      await handleSaveConfig({ mutedPhones: newMutedList });
+                    }}
+                    className={`p-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center justify-center ${
+                      (config.mutedPhones || []).some(p => p.replace(/\D/g, "") === selectedSession?.customerPhone?.replace(/\D/g, ""))
+                        ? "bg-rose-500/20 border border-rose-500/30 text-rose-300 hover:bg-rose-500/30"
+                        : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200"
+                    }`}
+                    title={(config.mutedPhones || []).some(p => p.replace(/\D/g, "") === selectedSession?.customerPhone?.replace(/\D/g, "")) ? "Robô silenciado. Clique para reativar" : "Clique para silenciar o Robô para este contato"}
+                  >
+                    <VolumeX className="w-4 h-4" />
+                  </button>
+
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${
+                    selectedSession?.isReal
+                      ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400"
+                      : "bg-indigo-500/15 border border-indigo-500/30 text-indigo-400"
+                  }`}>
+                    {selectedSession?.isReal ? "Real" : "Teste"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Messages Area (Flex-1 scrollable) */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+                {(!selectedSession?.messages || selectedSession.messages.length === 0) ? (
+                  <div className="text-center text-slate-500 text-xs py-10">
+                    Nenhuma mensagem nesta conversa.
+                  </div>
+                ) : (
+                  selectedSession.messages.map((msg: any, idx: number) => {
+                    const isCustomer = msg.sender === "customer";
+                    return (
+                      <div
+                        key={msg.id || idx}
+                        className={`flex ${isCustomer ? 'justify-start' : 'justify-end'}`}
+                      >
+                        <div
+                          className={`max-w-[85%] rounded-2xl p-3 shadow-md ${
+                            isCustomer
+                              ? 'bg-slate-900 text-slate-100 rounded-tl-sm border border-slate-800'
+                              : 'bg-emerald-600 text-white rounded-tr-sm'
+                          }`}
+                        >
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                          <div className="flex items-center justify-end gap-1 mt-1">
+                            <span className={`text-[9px] font-mono ${isCustomer ? 'text-slate-400' : 'text-emerald-100'}`}>
+                              {msg.timestamp || "09:00"}
+                            </span>
+                            {!isCustomer && (
+                              <Check className="w-3 h-3 text-emerald-100 shrink-0" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={chatEndRef}></div>
+              </div>
+
+              {/* Mobile Quick Replies Menu (Shrink-0 above input) */}
+              <div className="bg-[#090e17] border-t border-slate-800/60 px-3 py-2 flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none shrink-0">
+                <p className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mr-1 shrink-0">
+                  ⚡ Rápidas:
+                </p>
+                <button
+                  onClick={() => setWhatsappInputValue("A formatação sem backup fica por R$ 90,00, e com backup completo fica por R$ 110,00. Qual opção você prefere?")}
+                  className="px-3 py-1.5 rounded-full bg-[#11192e] border border-slate-800 text-xs text-slate-200 shrink-0 cursor-pointer hover:bg-slate-800 active:bg-slate-700"
+                >
+                  R$ 90 / R$ 110 Formatação
+                </button>
+                <button
+                  onClick={() => setWhatsappInputValue("Olá! Seja bem-vindo à AndMicrocell. Poderia nos informar a marca, modelo e o defeito do seu aparelho para fazermos um orçamento?")}
+                  className="px-3 py-1.5 rounded-full bg-[#11192e] border border-slate-800 text-xs text-slate-200 shrink-0 cursor-pointer hover:bg-slate-800 active:bg-slate-700"
+                >
+                  Pedir Modelo/Defeito
+                </button>
+                <button
+                  onClick={() => setWhatsappInputValue("Seu aparelho já está pronto e testado! Pode vir retirar na nossa loja quando desejar. Ficamos no aguardo.")}
+                  className="px-3 py-1.5 rounded-full bg-[#11192e] border border-slate-800 text-xs text-slate-200 shrink-0 cursor-pointer hover:bg-slate-800 active:bg-slate-700"
+                >
+                  Aparelho Pronto ✅
+                </button>
+              </div>
+
+              {/* Mobile Input form (Shrink-0 at bottom) */}
+              <div className="p-2.5 bg-[#0b101d] border-t border-slate-800/80 shrink-0">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (isAiAnswering || isSendingManual) return;
+                    if (!whatsappInputValue.trim()) return;
+
+                    if (selectedSession?.isReal) {
+                      handleSendManualMessage();
+                    } else {
+                      handleSendCustomerMessage();
+                    }
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    value={whatsappInputValue}
+                    onChange={(e) => setWhatsappInputValue(e.target.value)}
+                    placeholder={selectedSession?.isReal ? "Enviar resposta oficial..." : "Simular resposta cliente..."}
+                    disabled={isAiAnswering || isSendingManual}
+                    className="flex-1 px-3.5 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 text-base focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all min-w-0"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isAiAnswering || isSendingManual || !whatsappInputValue.trim()}
+                    className="h-11 w-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-slate-800 disabled:text-slate-600 text-white font-medium transition-colors flex items-center justify-center shrink-0 cursor-pointer shadow-md shadow-emerald-600/10"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
     );
   }
 
@@ -993,6 +1684,19 @@ export default function App() {
                 IA: {config.autoRespondWhatsApp ? "Autônoma" : "Copiloto"}
               </span>
             </div>
+            <button
+              onClick={() => {
+                setIsMobileChatOnly(true);
+                localStorage.setItem("and_microcell_mobile_chat_only", "true");
+                setMobileActiveSection('list');
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-all shadow-md shadow-emerald-600/10 cursor-pointer"
+              id="btn-toggle-mobile-chat-header"
+              title="Alternar para o modo aplicativo de chat otimizado para celulares"
+            >
+              <Phone className="w-3.5 h-3.5 animate-bounce" />
+              <span>Modo Celular 📱</span>
+            </button>
             <a
               href={window.location.href}
               target="_blank"
@@ -1040,46 +1744,6 @@ export default function App() {
               >
                 <Activity className="w-4 h-4" />
                 <span>Painel Geral</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('whatsapp')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'whatsapp'
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10'
-                    : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                }`}
-                id="btn-nav-whatsapp"
-              >
-                <div className="flex items-center gap-3">
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Chat do WhatsApp</span>
-                </div>
-                {sessions.some(s => s.unreadCount > 0) && (
-                  <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse" id="unread-pill">
-                    {sessions.reduce((acc, s) => acc + s.unreadCount, 0)}
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={() => setActiveTab('google')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'google'
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10'
-                    : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                }`}
-                id="btn-nav-google"
-              >
-                <div className="flex items-center gap-3">
-                  <Star className="w-4 h-4" />
-                  <span>Google Avaliações</span>
-                </div>
-                {reviews.filter(r => r.responseStatus === 'unanswered').length > 0 && (
-                  <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold" id="pending-reviews-pill">
-                    {reviews.filter(r => r.responseStatus === 'unanswered').length}
-                  </span>
-                )}
               </button>
 
               <button
@@ -1135,101 +1799,10 @@ export default function App() {
               >
                 <Shield className="w-4 h-4 text-emerald-400" />
                 <span className="flex items-center gap-1.5">
-                  Ativar API Oficial
-                  <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">Nova</span>
+                  Integração Chatwoot
                 </span>
               </button>
             </nav>
-          </div>
-
-          {/* Quick Config Widget */}
-          <div className="p-5 rounded-2xl bg-[#0b101d] border border-slate-800/60 flex flex-col gap-4" id="sidebar-quick-config">
-            <h4 className="text-slate-400 text-[10px] font-mono font-bold uppercase tracking-wider px-2" id="quick-config-title">Ações Rápidas IA</h4>
-            
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/50" id="toggle-whatsapp-container">
-              <div>
-                <p className="text-xs font-semibold text-slate-200">Auto-WhatsApp</p>
-                <p className="text-[10px] text-slate-500">Responde sem aprovar</p>
-              </div>
-              <button
-                onClick={() => handleSaveConfig({ autoRespondWhatsApp: !config.autoRespondWhatsApp })}
-                className={`w-10 h-5.5 rounded-full p-0.5 transition-colors cursor-pointer ${config.autoRespondWhatsApp ? 'bg-indigo-600' : 'bg-slate-800'}`}
-                id="btn-toggle-auto-whatsapp"
-              >
-                <div className={`w-4.5 h-4.5 rounded-full bg-white transition-transform ${config.autoRespondWhatsApp ? 'translate-x-4.5' : ''}`}></div>
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/50" id="toggle-reviews-container">
-              <div>
-                <p className="text-xs font-semibold text-slate-200">Auto-Avaliações</p>
-                <p className="text-[10px] text-slate-500">Gera resposta direta</p>
-              </div>
-              <button
-                onClick={() => handleSaveConfig({ autoRespondReviews: !config.autoRespondReviews })}
-                className={`w-10 h-5.5 rounded-full p-0.5 transition-colors cursor-pointer ${config.autoRespondReviews ? 'bg-indigo-600' : 'bg-slate-800'}`}
-                id="btn-toggle-auto-reviews"
-              >
-                <div className={`w-4.5 h-4.5 rounded-full bg-white transition-transform ${config.autoRespondReviews ? 'translate-x-4.5' : ''}`}></div>
-              </button>
-            </div>
-          </div>
-
-          {/* Simulate External Events Panel */}
-          <div className="p-5 rounded-2xl bg-slate-950/40 border border-slate-800/80" id="simulation-box">
-            <div className="flex items-center gap-1.5 mb-3 px-2" id="simulation-header">
-              <Sliders className="w-3.5 h-3.5 text-slate-500" />
-              <h4 className="text-slate-400 text-[10px] font-mono font-bold uppercase tracking-wider" id="simulation-title">Gerador de Eventos</h4>
-            </div>
-            <div className="flex flex-col gap-2.5" id="simulation-btns">
-              <button
-                onClick={() => {
-                  const names = ["Luiz Fernando", "Aline Santos", "Gustavo Silva", "Renata Meireles"];
-                  const selectedName = names[Math.floor(Math.random() * names.length)];
-                  const questions = [
-                    "Vocês dão desconto para trocar tela de iPhone?",
-                    "Consertam conector de carga?",
-                    "Fazem formatação de notebook?",
-                    "Vocês buscam o celular em casa?"
-                  ];
-                  const selectedMsg = questions[Math.floor(Math.random() * questions.length)];
-                  handleSimulateNewChat(selectedName, `+55 11 99${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`, selectedMsg);
-                }}
-                className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-[11px] font-medium text-slate-300 transition-colors flex items-center justify-between cursor-pointer"
-                id="btn-sim-chat"
-              >
-                <span>Simular Chat no WhatsApp</span>
-                <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
-              </button>
-
-              <button
-                onClick={() => {
-                  const authors = ["Beatriz Costa", "Fernando Andrade", "Juliana Ribeiro", "Pedro Henrique"];
-                  const selectedAuthor = authors[Math.floor(Math.random() * authors.length)];
-                  const badComments = [
-                    "Tentei ligar e demorou para responder.",
-                    "O preço cobrado foi acima da média.",
-                    "A loja é um pouco difícil de estacionar."
-                  ];
-                  const goodComments = [
-                    "Atendimento impecável! Resolveram o problema no mesmo dia.",
-                    "Ótimo serviço, preço justo e equipe atenciosa.",
-                    "Muito satisfeito com a rapidez e a garantia dada no conserto!"
-                  ];
-                  const score = Math.random() > 0.3 ? (Math.random() > 0.4 ? 5 : 4) : (Math.random() > 0.5 ? 3 : 2);
-                  const selectedComment = score >= 4 
-                    ? goodComments[Math.floor(Math.random() * goodComments.length)]
-                    : badComments[Math.floor(Math.random() * badComments.length)];
-                  
-                  handleSimulateNewReview(score, selectedComment, selectedAuthor);
-                }}
-                className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-[11px] font-medium text-slate-300 transition-colors flex items-center justify-between cursor-pointer"
-                id="btn-sim-review"
-              >
-                <span>Simular Avaliação Google</span>
-                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-              </button>
-            </div>
           </div>
         </aside>
 
@@ -1247,43 +1820,32 @@ export default function App() {
                 id="dashboard-tab-panel"
               >
                 {/* Metrics Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4" id="dashboard-metrics">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="dashboard-metrics">
                   <div className="p-5 rounded-2xl bg-[#0b101d] border border-slate-800/60" id="metric-1">
-                    <p className="text-slate-500 text-xs font-mono uppercase tracking-wider" id="metric-1-lbl">Atendimentos IA</p>
+                    <p className="text-slate-500 text-xs font-mono uppercase tracking-wider" id="metric-1-lbl">Atendimentos WhatsApp</p>
                     <div className="flex items-baseline gap-2 mt-2" id="metric-1-val-group">
                       <span className="text-3xl font-display font-black text-white" id="metric-1-val">42</span>
-                      <span className="text-emerald-500 text-xs font-semibold font-mono" id="metric-1-pct">+12%</span>
+                      <span className="text-emerald-500 text-xs font-semibold font-mono" id="metric-1-pct">Ativo</span>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1" id="metric-1-desc">Automáticos ou Assistidos</p>
+                    <p className="text-[10px] text-slate-400 mt-1" id="metric-1-desc">Mensagens respondidas via Chatwoot</p>
                   </div>
 
                   <div className="p-5 rounded-2xl bg-[#0b101d] border border-slate-800/60" id="metric-2">
-                    <p className="text-slate-500 text-xs font-mono uppercase tracking-wider" id="metric-2-lbl">Avaliações Google</p>
+                    <p className="text-slate-500 text-xs font-mono uppercase tracking-wider" id="metric-2-lbl">FAQs Ativas</p>
                     <div className="flex items-baseline gap-2 mt-2" id="metric-2-val-group">
-                      <span className="text-3xl font-display font-black text-white" id="metric-2-val">{reviews.length}</span>
-                      <span className="text-amber-500 text-xs font-semibold font-mono" id="metric-2-avg">4.6 ★</span>
+                      <span className="text-3xl font-display font-black text-white" id="metric-2-val">{config.faqs.length}</span>
+                      <span className="text-indigo-400 text-xs font-mono font-semibold" id="metric-2-cap">Mapeadas</span>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1" id="metric-2-desc">Avaliação média do perfil</p>
+                    <p className="text-[10px] text-slate-400 mt-1" id="metric-2-desc">Base de conhecimento ativa</p>
                   </div>
 
                   <div className="p-5 rounded-2xl bg-[#0b101d] border border-slate-800/60" id="metric-3">
-                    <p className="text-slate-500 text-xs font-mono uppercase tracking-wider" id="metric-3-lbl">Respondidas pela IA</p>
+                    <p className="text-slate-500 text-xs font-mono uppercase tracking-wider" id="metric-3-lbl">Modelos de Preços</p>
                     <div className="flex items-baseline gap-2 mt-2" id="metric-3-val-group">
-                      <span className="text-3xl font-display font-black text-white" id="metric-3-val">
-                        {reviews.filter(r => r.responseStatus === 'published').length}
-                      </span>
-                      <span className="text-slate-400 text-xs font-mono" id="metric-3-slash">/{reviews.length}</span>
+                      <span className="text-3xl font-display font-black text-white" id="metric-3-val">{config.prices?.length || 12}</span>
+                      <span className="text-emerald-400 text-xs font-mono font-semibold" id="metric-3-cap">Orçamentos</span>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1" id="metric-3-desc">Respostas públicas no GMB</p>
-                  </div>
-
-                  <div className="p-5 rounded-2xl bg-[#0b101d] border border-slate-800/60" id="metric-4">
-                    <p className="text-slate-500 text-xs font-mono uppercase tracking-wider" id="metric-4-lbl">FAQs Ativas</p>
-                    <div className="flex items-baseline gap-2 mt-2" id="metric-4-val-group">
-                      <span className="text-3xl font-display font-black text-white" id="metric-4-val">{config.faqs.length}</span>
-                      <span className="text-indigo-400 text-xs font-mono font-semibold" id="metric-4-cap">Conhecimento</span>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1" id="metric-4-desc">Base de respostas mapeadas</p>
+                    <p className="text-[10px] text-slate-400 mt-1" id="metric-3-desc">Modelos de serviços cadastrados</p>
                   </div>
                 </div>
 
@@ -1294,30 +1856,22 @@ export default function App() {
                     <div id="status-banner-header">
                       <div className="flex items-center gap-2 mb-2" id="ai-status-header">
                         <Bot className="text-indigo-400 w-5 h-5 animate-bounce" />
-                        <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider font-mono">Status do Agente Inteligente</span>
+                        <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider font-mono">Status do Robô de Atendimento</span>
                       </div>
                       <h3 className="font-display font-bold text-2xl text-white tracking-tight" id="status-banner-title">
                         Agente pronto e vigiando canais de atendimento
                       </h3>
                       <p className="text-slate-400 text-sm mt-2 leading-relaxed" id="status-banner-text">
-                        A inteligência artificial da <strong>AndMicrocell</strong> está conectada às avaliações públicas do Google Meu Negócio e atende simulações de WhatsApp em tempo real. Seus FAQs cadastrados alimentam o contexto cognitivo do Gemini.
+                        A inteligência artificial da <strong>AndMicrocell</strong> está integrada ao seu Chatwoot oficial e atende conversas de clientes de forma 100% autônoma. Seus FAQs cadastrados alimentam o contexto cognitivo do Gemini.
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="status-banner-checks">
+                    <div className="grid grid-cols-1 gap-4" id="status-banner-checks">
                       <div className="p-3.5 rounded-xl bg-slate-950/50 border border-slate-800/80 flex items-start gap-3" id="check-1">
                         <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                         <div>
-                          <h4 className="text-xs font-bold text-slate-200">Integração WhatsApp</h4>
-                          <p className="text-[10px] text-slate-400 mt-1">Conectado. Modo: {config.autoRespondWhatsApp ? "Automação Completa" : "Copiloto (Aprovação prévia)"}</p>
-                        </div>
-                      </div>
-
-                      <div className="p-3.5 rounded-xl bg-slate-950/50 border border-slate-800/80 flex items-start gap-3" id="check-2">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-200">Google Meu Negócio</h4>
-                          <p className="text-[10px] text-slate-400 mt-1">Sincronizado. {reviews.length} avaliações lidas | {reviews.filter(r => r.responseStatus === 'unanswered').length} pendentes</p>
+                          <h4 className="text-xs font-bold text-slate-200">Integração Chatwoot Webhook</h4>
+                          <p className="text-[10px] text-slate-400 mt-1">Conectado e Ativo. Modo: {config.autoRespondWhatsApp ? "Automação Completa" : "Pausado (Apenas manual)"}</p>
                         </div>
                       </div>
                     </div>
@@ -1328,11 +1882,11 @@ export default function App() {
                         <span className="text-xs font-mono text-slate-400">Atividade em tempo real ativa</span>
                       </div>
                       <button
-                        onClick={() => setActiveTab('whatsapp')}
+                        onClick={() => setActiveTab('integration')}
                         className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-all flex items-center gap-1 cursor-pointer"
-                        id="btn-goto-simulator"
+                        id="btn-goto-integration"
                       >
-                        <span>Abrir Simulador WhatsApp</span>
+                        <span>Configurar Integração Chatwoot</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -1379,459 +1933,7 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'whatsapp' && (
-              <motion.div
-                key="whatsapp-tab"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                transition={{ duration: 0.25 }}
-                className="grid grid-cols-1 md:grid-cols-3 gap-6"
-                id="whatsapp-tab-panel"
-              >
-                {/* Chat Session List */}
-                <div className="p-5 rounded-3xl bg-[#0b101d] border border-slate-800/60 flex flex-col gap-4" id="chat-session-list">
-                  <h3 className="font-display font-semibold text-base text-white px-1" id="sessions-list-title">Conversas Ativas</h3>
-                  
-                  <div className="flex flex-col gap-2 overflow-y-auto max-h-[500px]" id="sessions-scroll">
-                    {sessions.map((sess) => {
-                      const isSelected = sess.id === selectedSessionId;
-                      return (
-                        <button
-                          key={sess.id}
-                          onClick={() => {
-                            setSelectedSessionId(sess.id);
-                            // Mark unread as read
-                            setSessions(prev => prev.map(s => s.id === sess.id ? { ...s, unreadCount: 0 } : s));
-                          }}
-                          className={`w-full p-3.5 rounded-2xl border text-left transition-all flex items-start justify-between gap-3 cursor-pointer ${
-                            isSelected 
-                              ? 'bg-indigo-600/10 border-indigo-500/50' 
-                              : 'bg-slate-900/40 border-slate-800 hover:bg-slate-900 hover:border-slate-700/60'
-                          }`}
-                          id={`session-btn-${sess.id}`}
-                        >
-                          <div className="min-w-0" id={`session-btn-content-${sess.id}`}>
-                            <div className="flex items-center gap-2" id={`session-user-row-${sess.id}`}>
-                              <p className="text-xs font-bold text-slate-200 truncate" id={`session-name-${sess.id}`}>{sess.customerName}</p>
-                              {sess.unreadCount > 0 && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" id={`unread-dot-${sess.id}`}></span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-slate-500 font-mono mt-0.5" id={`session-phone-${sess.id}`}>{sess.customerPhone}</p>
-                            <p className="text-xs text-slate-400 mt-2 truncate font-medium" id={`session-last-msg-${sess.id}`}>{sess.lastMessage}</p>
-                          </div>
-                          
-                          <ChevronRight className="w-4 h-4 text-slate-600 shrink-0 mt-1" id={`session-arrow-${sess.id}`} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
 
-                {/* Simulated Phone WhatsApp Chatbox */}
-                <div className="md:col-span-2 flex flex-col rounded-3xl bg-slate-950 border border-slate-850 overflow-hidden min-h-[500px]" id="whatsapp-simulator">
-                  {/* Mock Phone Header */}
-                  <div className="px-5 py-4 bg-[#0c1221] border-b border-slate-850 flex items-center justify-between" id="mock-phone-header">
-                    <div className="flex items-center gap-3.5" id="mock-user-info">
-                      <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold" id="mock-avatar">
-                        {selectedSession?.customerName.charAt(0)}
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-100" id="mock-user-name">{selectedSession?.customerName}</h4>
-                        <div className="flex items-center gap-1.5" id="mock-user-status-container">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" id="mock-user-dot"></span>
-                          <span className="text-[10px] font-mono text-slate-400" id="mock-user-status">Online no WhatsApp</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2.5" id="mock-phone-meta">
-                      <span className="text-[10px] font-mono px-2 py-1 rounded bg-slate-900 border border-slate-800 text-slate-400" id="mock-phone-lbl">
-                        Simulador WhatsApp
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Messages Window */}
-                  <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-[#090d16] min-h-[300px]" id="chat-messages-box">
-                    <div className="text-center" id="chat-system-date">
-                      <span className="px-2.5 py-1 rounded-full bg-slate-900 border border-slate-850 text-[10px] text-slate-500 font-mono font-bold uppercase tracking-wider">
-                        Hoje
-                      </span>
-                    </div>
-
-                    {selectedSession?.messages.map((msg) => {
-                      const isCustomer = msg.sender === "customer";
-                      const isSystem = msg.sender === "system";
-
-                      if (isSystem) {
-                        return (
-                          <div key={msg.id} className="text-center" id={`chat-sys-msg-${msg.id}`}>
-                            <span className="px-3 py-1.5 rounded bg-slate-900/60 text-[10px] text-slate-400 inline-block max-w-sm">
-                              {msg.text}
-                            </span>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div
-                          key={msg.id}
-                          className={`flex flex-col ${isCustomer ? 'items-start' : 'items-end'}`}
-                          id={`chat-msg-wrapper-${msg.id}`}
-                        >
-                          <div className="flex items-start gap-2 max-w-[85%]" id={`chat-msg-block-${msg.id}`}>
-                            {!isCustomer && (
-                              <div className="w-6 h-6 rounded-full bg-indigo-600/20 flex items-center justify-center shrink-0 mt-0.5 border border-indigo-500/20" id={`chat-msg-bot-${msg.id}`}>
-                                <Bot className="w-3.5 h-3.5 text-indigo-400" />
-                              </div>
-                            )}
-
-                            <div>
-                              <div
-                                className={`p-3.5 rounded-2xl text-sm ${
-                                  isCustomer
-                                    ? 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
-                                    : msg.status === 'pending_approval'
-                                      ? 'bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 rounded-tr-none'
-                                      : 'bg-indigo-600 text-white rounded-tr-none shadow-md shadow-indigo-600/5'
-                                }`}
-                                id={`chat-msg-bubble-${msg.id}`}
-                              >
-                                {msg.text}
-                                
-                                {/* IA Metadata inside chat */}
-                                {msg.status === 'pending_approval' && (
-                                  <div className="mt-3 pt-2.5 border-t border-indigo-500/20 flex items-center justify-between gap-4" id={`chat-draft-actions-${msg.id}`}>
-                                    <span className="text-[10px] font-mono text-indigo-400 font-bold uppercase tracking-wider flex items-center gap-1">
-                                      <Sparkles className="w-3 h-3 text-indigo-400 animate-pulse" />
-                                      Rascunho Inteligente IA
-                                    </span>
-                                    <div className="flex items-center gap-1.5" id={`chat-draft-btns-${msg.id}`}>
-                                      <button
-                                        onClick={() => handleRejectDraft(msg.id)}
-                                        className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-850 border border-slate-800 text-[10px] font-semibold text-rose-400 transition-colors cursor-pointer"
-                                        id={`btn-reject-draft-${msg.id}`}
-                                      >
-                                        Descartar
-                                      </button>
-                                      <button
-                                        onClick={() => handleApproveDraft(msg.id)}
-                                        className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-[10px] font-semibold text-white transition-colors flex items-center gap-1 cursor-pointer"
-                                        id={`btn-approve-draft-${msg.id}`}
-                                      >
-                                        <Check className="w-3 h-3 text-white" />
-                                        Aprovar e Enviar
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                              <span className="text-[9px] text-slate-500 font-mono mt-1 block px-1" id={`chat-msg-time-${msg.id}`}>
-                                {msg.timestamp} {msg.status === 'pending_approval' ? '• Aguardando revisão' : ''}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {isAiAnswering && (
-                      <div className="flex items-center gap-2 text-indigo-400 text-xs px-2 animate-pulse" id="ai-typing-loader">
-                        <Bot className="w-4 h-4 animate-bounce" />
-                        <span className="font-medium">
-                          {typingStatus === "generating" 
-                            ? "Agente IA está elaborando a resposta com o Gemini..." 
-                            : `${config.name.split(" - ")[0]} está digitando...`}
-                        </span>
-                      </div>
-                    )}
-
-                    <div ref={chatEndRef} id="chat-end-anchor"></div>
-                  </div>
-
-                  {/* Suggest Test Prompts Pill Section */}
-                  <div className="px-5 py-3.5 bg-[#0b0f19]/60 border-t border-slate-850/80" id="suggest-prompts-bar">
-                    <p className="text-[10px] text-slate-500 font-mono font-bold uppercase tracking-wider mb-2 px-1" id="suggest-title">
-                      💡 Perguntas de teste do Cliente (Clique para simular):
-                    </p>
-                    <div className="flex flex-wrap gap-2" id="suggest-pills">
-                      {suggestedQuestions.map((q, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleSendCustomerMessage(q)}
-                          disabled={isAiAnswering}
-                          className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-xs text-slate-300 hover:text-slate-100 transition-colors disabled:opacity-50 cursor-pointer"
-                          id={`btn-suggest-${index}`}
-                        >
-                          {q}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Message Input Form */}
-                  <form 
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (!isAiAnswering && whatsappInputValue.trim()) {
-                        handleSendCustomerMessage();
-                      }
-                    }}
-                    className="p-4 bg-[#0c1221] border-t border-slate-850 flex gap-2.5" 
-                    id="chat-input-area"
-                  >
-                    <input
-                      type="text"
-                      value={whatsappInputValue}
-                      onChange={(e) => setWhatsappInputValue(e.target.value)}
-                      placeholder="Simule a resposta do cliente aqui e envie..."
-                      disabled={isAiAnswering}
-                      className="flex-1 px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-                      id="chat-text-input"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isAiAnswering || !whatsappInputValue.trim()}
-                      className="px-4.5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-medium text-sm transition-colors duration-150 flex items-center justify-center cursor-pointer"
-                      id="chat-send-btn"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </form>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'google' && (
-              <motion.div
-                key="google-tab"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                transition={{ duration: 0.25 }}
-                className="space-y-6"
-                id="google-tab-panel"
-              >
-                {/* GMB Banner Status */}
-                <div className="p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/20 to-slate-900 border border-slate-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-6" id="gmb-overview-card">
-                  <div id="gmb-overview-left">
-                    <div className="flex items-center gap-2 mb-2" id="gmb-badge-row">
-                      <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider font-mono">Google Meu Negócio Sincronizado</span>
-                    </div>
-                    <h3 className="font-display font-bold text-xl text-white" id="gmb-card-title">{config.name}</h3>
-                    <p className="text-xs text-slate-400 mt-1" id="gmb-card-desc">Sincronização em tempo real das avaliações do seu perfil comercial.</p>
-                  </div>
-
-                  <div className="flex gap-4" id="gmb-overview-stats">
-                    <div className="px-4 py-2 bg-slate-950/60 border border-slate-800 rounded-xl text-center" id="gmb-stat-1">
-                      <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider" id="gmb-stat-1-lbl">Score Geral</p>
-                      <p className="text-lg font-bold text-white mt-1" id="gmb-stat-1-val">4.6 ★</p>
-                    </div>
-                    <div className="px-4 py-2 bg-slate-950/60 border border-slate-800 rounded-xl text-center" id="gmb-stat-2">
-                      <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider" id="gmb-stat-2-lbl">Não Respondidas</p>
-                      <p className="text-lg font-bold text-rose-400 mt-1" id="gmb-stat-2-val">
-                        {reviews.filter(r => r.responseStatus === 'unanswered').length}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Manual Review Entry Form */}
-                <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-850" id="manual-review-form-card">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4" id="manual-review-header">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-200">Recebeu uma avaliação real no Google Meu Negócio?</h4>
-                      <p className="text-xs text-slate-400 mt-0.5">Adicione aqui a avaliação real (como a de 5 estrelas que você recebeu essa semana) para gerar rascunhos de resposta personalizados com a IA.</p>
-                    </div>
-                    <button 
-                      onClick={() => setShowAddReviewForm(!showAddReviewForm)}
-                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-all shadow-md hover:shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-2 self-start sm:self-auto" 
-                      id="btn-toggle-add-review"
-                    >
-                      <Plus className={`w-4 h-4 transition-transform ${showAddReviewForm ? 'rotate-45' : ''}`} />
-                      <span>{showAddReviewForm ? "Fechar" : "Inserir Avaliação"}</span>
-                    </button>
-                  </div>
-
-                  <AnimatePresence>
-                    {showAddReviewForm && (
-                      <motion.form
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (!customReviewAuthor.trim()) return;
-                          handleSimulateNewReview(customReviewRating, customReviewComment, customReviewAuthor);
-                          setCustomReviewAuthor("");
-                          setCustomReviewComment("");
-                          setCustomReviewRating(5);
-                          setShowAddReviewForm(false);
-                        }}
-                        className="mt-6 pt-6 border-t border-slate-800/60 space-y-4 overflow-hidden"
-                        id="form-add-review"
-                      >
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="review-fields-row">
-                          <div className="space-y-1.5" id="field-author">
-                            <label className="text-xs text-slate-400 font-semibold">Nome do Cliente *</label>
-                            <input
-                              type="text"
-                              required
-                              value={customReviewAuthor}
-                              onChange={(e) => setCustomReviewAuthor(e.target.value)}
-                              placeholder="Ex: Beatriz Costa"
-                              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
-                              id="input-review-author"
-                            />
-                          </div>
-
-                          <div className="space-y-1.5" id="field-stars">
-                            <label className="text-xs text-slate-400 font-semibold">Classificação (Estrelas)</label>
-                            <div className="flex items-center gap-1.5 h-9" id="stars-selector">
-                              {[1, 2, 3, 4, 5].map((starNum) => (
-                                <button
-                                  type="button"
-                                  key={starNum}
-                                  onClick={() => setCustomReviewRating(starNum)}
-                                  className="p-1 hover:scale-110 transition-transform cursor-pointer"
-                                  id={`btn-star-select-${starNum}`}
-                                >
-                                  <Star
-                                    className={`w-5 h-5 ${starNum <= customReviewRating ? 'text-amber-400 fill-amber-400' : 'text-slate-600'}`}
-                                  />
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5" id="field-comment">
-                          <label className="text-xs text-slate-400 font-semibold">Comentário / Texto da Avaliação</label>
-                          <textarea
-                            value={customReviewComment}
-                            onChange={(e) => setCustomReviewComment(e.target.value)}
-                            placeholder="Cole o comentário da avaliação recebida para a IA analisar e responder..."
-                            rows={3}
-                            className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 resize-none"
-                            id="input-review-comment"
-                          />
-                        </div>
-
-                        <div className="flex justify-end pt-2" id="review-form-actions">
-                          <button
-                            type="submit"
-                            className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors cursor-pointer flex items-center gap-1.5"
-                            id="btn-submit-review"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            Adicionar Avaliação no Painel
-                          </button>
-                        </div>
-                      </motion.form>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Reviews List */}
-                <div className="space-y-4" id="reviews-feed">
-                  <h3 className="font-display font-semibold text-base text-white px-1" id="reviews-title">Avaliações do Perfil ({reviews.length})</h3>
-
-                  <div className="space-y-4" id="reviews-list-container">
-                    {reviews.map((rev) => (
-                      <div key={rev.id} className="p-6 rounded-2xl bg-[#0b101d] border border-slate-800/80 flex flex-col gap-4" id={`review-card-${rev.id}`}>
-                        <div className="flex items-start justify-between gap-4" id={`review-top-${rev.id}`}>
-                          <div className="flex items-center gap-3" id={`review-user-${rev.id}`}>
-                            <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-300" id={`review-avatar-${rev.id}`}>
-                              {rev.authorName.charAt(0)}
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-slate-200" id={`review-author-${rev.id}`}>{rev.authorName}</h4>
-                              <p className="text-[10px] text-slate-500 font-mono" id={`review-date-${rev.id}`}>{rev.publishDate}</p>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-0.5" id={`review-stars-${rev.id}`}>
-                            {[1, 2, 3, 4, 5].map((starNum) => (
-                              <Star
-                                key={starNum}
-                                className={`w-4 h-4 ${starNum <= rev.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-700'}`}
-                                id={`review-star-${rev.id}-${starNum}`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-
-                        <p className="text-slate-300 text-sm leading-relaxed px-1" id={`review-comment-${rev.id}`}>
-                          {rev.comment ? `"${rev.comment}"` : <span className="text-slate-500 italic">O cliente não escreveu um comentário, apenas avaliou com estrelas.</span>}
-                        </p>
-
-                        {/* AI Reply Space */}
-                        <div className="pt-2" id={`review-reply-section-${rev.id}`}>
-                          {rev.responseStatus === 'unanswered' ? (
-                            <button
-                              onClick={() => handleGenerateReviewReply(rev.id)}
-                              disabled={isGeneratingReviewReply !== null}
-                              className="px-4 py-2 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 hover:border-indigo-500/30 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-                              id={`btn-gen-reply-${rev.id}`}
-                            >
-                              {isGeneratingReviewReply === rev.id ? (
-                                <>
-                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                  <span>Gerando Rascunho Gemini...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                                  <span>Gerar Resposta com IA</span>
-                                </>
-                              )}
-                            </button>
-                          ) : (
-                            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800" id={`review-reply-box-${rev.id}`}>
-                              <div className="flex items-center justify-between pb-2.5 border-b border-slate-800/60 mb-3" id={`review-reply-header-${rev.id}`}>
-                                <div className="flex items-center gap-1.5" id={`review-reply-badge-container-${rev.id}`}>
-                                  <Bot className="w-4 h-4 text-purple-400" id={`review-reply-bot-icon-${rev.id}`} />
-                                  <span className="text-[10px] font-mono text-purple-400 font-bold uppercase tracking-wider" id={`review-reply-badge-${rev.id}`}>
-                                    {rev.responseStatus === 'draft' ? 'Rascunho de IA gerado' : 'Resposta publicada no GMB'}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] font-mono text-slate-500" id={`review-reply-time-badge-${rev.id}`}>Gemini v3.5</span>
-                              </div>
-
-                              <p className="text-slate-300 text-xs leading-relaxed" id={`review-reply-text-${rev.id}`}>{rev.aiResponse}</p>
-
-                              {rev.responseStatus === 'draft' && (
-                                <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-end gap-2" id={`review-reply-actions-${rev.id}`}>
-                                  <button
-                                    onClick={() => handleDeleteReviewReply(rev.id)}
-                                    className="px-3 py-1.5 rounded-lg hover:bg-slate-850 text-xs font-semibold text-rose-400 transition-colors cursor-pointer"
-                                    id={`btn-del-reply-${rev.id}`}
-                                  >
-                                    Descartar
-                                  </button>
-                                  <button
-                                    onClick={() => handlePublishReviewReply(rev.id)}
-                                    className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-colors flex items-center gap-1.5 cursor-pointer"
-                                    id={`btn-pub-reply-${rev.id}`}
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                    Aprovar e Publicar
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
 
             {activeTab === 'settings' && (
               <motion.div
@@ -1855,8 +1957,8 @@ export default function App() {
                       <label className="block text-xs font-mono text-slate-400 mb-1.5">Nome Comercial</label>
                       <input
                         type="text"
-                        value={config.name}
-                        onChange={(e) => handleSaveConfig({ name: e.target.value })}
+                        value={localCompanyName}
+                        onChange={(e) => setLocalCompanyName(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"
                         id="input-company-name"
                       />
@@ -1866,8 +1968,8 @@ export default function App() {
                       <label className="block text-xs font-mono text-slate-400 mb-1.5">Categoria / Segmento</label>
                       <input
                         type="text"
-                        value={config.category}
-                        onChange={(e) => handleSaveConfig({ category: e.target.value })}
+                        value={localCompanyCategory}
+                        onChange={(e) => setLocalCompanyCategory(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"
                         id="input-company-category"
                       />
@@ -1877,8 +1979,8 @@ export default function App() {
                       <label className="block text-xs font-mono text-slate-400 mb-1.5">WhatsApp / Telefone</label>
                       <input
                         type="text"
-                        value={config.phone}
-                        onChange={(e) => handleSaveConfig({ phone: e.target.value })}
+                        value={localCompanyPhone}
+                        onChange={(e) => setLocalCompanyPhone(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"
                         id="input-company-phone"
                       />
@@ -1888,8 +1990,8 @@ export default function App() {
                       <label className="block text-xs font-mono text-slate-400 mb-1.5">Horários de Atendimento</label>
                       <input
                         type="text"
-                        value={config.businessHours}
-                        onChange={(e) => handleSaveConfig({ businessHours: e.target.value })}
+                        value={localCompanyHours}
+                        onChange={(e) => setLocalCompanyHours(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"
                         id="input-company-hours"
                       />
@@ -1899,8 +2001,8 @@ export default function App() {
                       <label className="block text-xs font-mono text-slate-400 mb-1.5">Endereço Físico</label>
                       <input
                         type="text"
-                        value={config.address}
-                        onChange={(e) => handleSaveConfig({ address: e.target.value })}
+                        value={localCompanyAddress}
+                        onChange={(e) => setLocalCompanyAddress(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"
                         id="input-company-address"
                       />
@@ -1909,8 +2011,8 @@ export default function App() {
                     <div className="md:col-span-2" id="fld-offers">
                       <label className="block text-xs font-mono text-slate-400 mb-1.5">Ofertas Especiais / Promoções</label>
                       <textarea
-                        value={config.specialOffers}
-                        onChange={(e) => handleSaveConfig({ specialOffers: e.target.value })}
+                        value={localCompanyOffers}
+                        onChange={(e) => setLocalCompanyOffers(e.target.value)}
                         className="w-full h-16 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 resize-none"
                         id="textarea-company-offers"
                       />
@@ -1925,11 +2027,11 @@ export default function App() {
                           { id: 'informal', label: 'Informal', desc: 'Descontraído' },
                           { id: 'enthusiastic', label: 'Entusiasta', desc: 'Energético e alegre' }
                         ].map((t) => {
-                          const isSelected = config.tone === t.id;
+                          const isSelected = localCompanyTone === t.id;
                           return (
                             <button
                               key={t.id}
-                              onClick={() => handleSaveConfig({ tone: t.id as any })}
+                              onClick={() => setLocalCompanyTone(t.id as any)}
                               className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                                 isSelected 
                                   ? 'bg-indigo-600/15 border-indigo-500 text-indigo-300' 
@@ -1943,6 +2045,43 @@ export default function App() {
                           );
                         })}
                       </div>
+                    </div>
+
+                    {/* Botão de Salvar com feedback visual claro */}
+                    <div className="md:col-span-2 pt-4 flex items-center justify-between gap-4 border-t border-slate-800/40 mt-2" id="company-save-container">
+                      <button
+                        onClick={handleSaveCompanyDetails}
+                        disabled={isSavingCompany}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                          isSavingCompany
+                            ? 'bg-slate-800 text-slate-500'
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10'
+                        }`}
+                        id="btn-save-company-details"
+                      >
+                        {isSavingCompany ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" id="spin-save-company"></div>
+                            <span>Salvando Alterações...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" id="svg-save-company">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>Salvar Dados da Empresa</span>
+                          </>
+                        )}
+                      </button>
+
+                      {showSavedCompanySuccess && (
+                        <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-medium animate-pulse" id="company-save-success-indicator">
+                          <svg className="w-4 h-4 text-emerald-400 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span>Alterações salvas com sucesso!</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2156,6 +2295,65 @@ export default function App() {
                     Restaurar Depoimentos Padrão
                   </button>
                 </div>
+
+                {/* Mobile App PWA Installation Card */}
+                <div className="p-6 rounded-3xl bg-gradient-to-br from-[#0b101d] to-[#0d162d] border border-slate-800/80 lg:col-span-3 space-y-5 shadow-lg" id="pwa-installation-card">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 uppercase tracking-widest animate-pulse">Recomendado</span>
+                        <h3 className="font-display font-bold text-base text-white flex items-center gap-2">
+                          <Phone className="w-5 h-5 text-emerald-400" />
+                          <span>Instale o Aplicativo Oficial de Chat no Celular (Sem Loja de Apps)</span>
+                        </h3>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        Converta o painel em um aplicativo móvel direto de chat e rode no seu smartphone exatamente como um aplicativo nativo baixado da App Store ou Play Store.
+                      </p>
+                    </div>
+
+                    <div className="px-3 py-1.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-[10px] text-slate-400 font-mono">
+                      Tecnologia PWA Ativa ✅
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+                    {/* iOS Safari Instructions */}
+                    <div className="p-4 rounded-2xl bg-slate-950/40 border border-slate-850/60 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-slate-900 flex items-center justify-center text-xs font-bold text-slate-300"></span>
+                        <h4 className="text-xs font-bold text-slate-200">Como instalar no iPhone (Safari)</h4>
+                      </div>
+                      <ol className="text-xs text-slate-400 space-y-2 list-decimal list-inside pl-1 leading-relaxed">
+                        <li>Abra o link do painel no navegador <strong className="text-slate-200">Safari</strong> do seu iPhone.</li>
+                        <li>Toque no botão de <strong className="text-slate-200">Compartilhar</strong> (ícone de um quadrado com uma seta para cima na barra inferior).</li>
+                        <li>Role a tela para baixo e selecione <strong className="text-slate-200">"Adicionar à Tela de Início"</strong>.</li>
+                        <li>Confirme clicando em <strong className="text-slate-200">"Adicionar"</strong> no topo direito. Pronto! O app surgirá na sua tela principal.</li>
+                      </ol>
+                    </div>
+
+                    {/* Android Chrome Instructions */}
+                    <div className="p-4 rounded-2xl bg-slate-950/40 border border-slate-850/60 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-slate-900 flex items-center justify-center text-xs font-bold text-slate-300">🤖</span>
+                        <h4 className="text-xs font-bold text-slate-200">Como instalar no Android (Chrome)</h4>
+                      </div>
+                      <ol className="text-xs text-slate-400 space-y-2 list-decimal list-inside pl-1 leading-relaxed">
+                        <li>Abra o link do painel no navegador <strong className="text-slate-200">Chrome</strong> do seu celular.</li>
+                        <li>Clique nos <strong className="text-slate-200">três pontinhos</strong> no canto superior direito do navegador.</li>
+                        <li>Selecione a opção <strong className="text-slate-200">"Instalar aplicativo"</strong> ou <strong className="text-slate-200">"Adicionar à tela inicial"</strong>.</li>
+                        <li>Clique em <strong className="text-slate-200">"Instalar"</strong>. O aplicativo será adicionado à sua tela inicial em segundos.</li>
+                      </ol>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 flex items-start gap-3.5 leading-relaxed">
+                    <span className="text-base shrink-0">✨</span>
+                    <p>
+                      <strong>Comportamento Inteligente:</strong> Ao abrir pelo ícone instalado no celular, o sistema detecta que você está no smartphone e **carrega instantaneamente apenas o app de Chat (Modo Celular)**. Caso precise ver o painel administrativo completo no celular, basta clicar no botão <strong className="underline">"Painel 🖥️"</strong> no topo da tela!
+                    </p>
+                  </div>
+                </div>
               </motion.div>
             )}
 
@@ -2192,170 +2390,212 @@ export default function App() {
                   <div>
                     <h3 className="font-display font-semibold text-base text-white flex items-center gap-2" id="integration-title">
                       <Shield className="w-5 h-5 text-emerald-400 animate-pulse" />
-                      Conectar Conta Oficial do WhatsApp Cloud API
+                      Integração Oficial do Robô com o Chatwoot
                     </h3>
                     <p className="text-xs text-slate-400 mt-1" id="integration-subtitle">
-                      Transforme o assistente virtual em um funcionário real. Siga o passo a passo oficial da Meta Developer para receber mensagens de clientes reais e respondê-los automaticamente no seu número comercial.
+                      Mantenha o seu assistente virtual de inteligência artificial conectado diretamente à sua instância do Chatwoot para responder aos seus clientes no WhatsApp de forma 100% automática.
                     </p>
-                  </div>
-
-                  {/* Standalone/Fullscreen Suggestion Callout Banner */}
-                  <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-3.5 text-slate-200" id="standalone-recommendation-banner">
-                    <div className="flex items-center gap-2" id="recommendation-header">
-                      <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
-                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider font-mono">Recomendação de Configuração</span>
-                    </div>
-                    <p className="text-xs text-slate-300 leading-relaxed" id="recommendation-body">
-                      Percebeu que preencheu as credenciais aqui na aba lateral do AI Studio e os dados parecem não persistir ou salvar? 
-                      Isso ocorre porque a visualização padrão roda dentro de um <strong>iFrame protegido do Google</strong>, o que pode bloquear cookies, permissões externas de segurança e sincronização de dados localmente.
-                    </p>
-                    <p className="text-xs font-semibold text-amber-300" id="recommendation-call-to-action">
-                      Para realizar o procedimento de validação, salvar suas chaves de API e testar o Webhook com segurança total na Meta, recomendamos abrir a aplicação solta em tela cheia:
-                    </p>
-                    <div className="pt-1.5 flex flex-col sm:flex-row items-center gap-4.5" id="recommendation-actions">
-                      <a
-                        href={window.location.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 cursor-pointer"
-                        id="btn-open-standalone-tab"
-                      >
-                        <Globe className="w-4 h-4 text-slate-950" />
-                        <span>Abrir ZetaChat AI Solto em Nova Aba ↗</span>
-                      </a>
-                      <span className="text-[10px] text-slate-500 font-mono" id="recommendation-note">
-                        (A visualização lateral atual servirá apenas como demonstrativo em tempo real)
-                      </span>
-                    </div>
                   </div>
 
                   {/* Webhook Endpoint Copy Box */}
                   <div className="p-5 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 space-y-4" id="webhook-copy-box">
                     <p className="text-xs font-semibold text-indigo-300 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5" />
-                      Passo 1: Configure o Webhook no Portal de Desenvolvedores da Meta
+                      URL do Webhook do seu Robô (Copie e configure no seu Chatwoot)
                     </p>
                     
                     <div className="space-y-4">
-                      {tunnelUrl ? (
-                        <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
-                          <span className="text-[11px] font-semibold text-emerald-400 block flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                            Opção 1: URL de Túnel Público (RECOMENDADA e Ativa agora!)
-                          </span>
-                          <p className="text-[10px] text-slate-400 mt-1">
-                            Como a visualização padrão do AI Studio possui bloqueio de segurança contra acessos externos de robôs, nós ativamos um **Túnel Público Aberto** para você. Use esta URL na Meta para que a verificação funcione na hora e as mensagens cheguem em tempo real!
-                          </p>
-                          <div className="flex items-center gap-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800 font-mono text-xs text-slate-300 mt-2" id="webhook-url-tunnel">
-                            <span className="truncate flex-1 select-all text-[11px] text-emerald-300 font-semibold">
-                              {tunnelUrl}/api/webhook/whatsapp
-                            </span>
-                            <button 
-                              onClick={() => {
-                                navigator.clipboard.writeText(`${tunnelUrl}/api/webhook/whatsapp`);
-                                alert("URL de Túnel Público copiada para a área de transferência!");
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[10px] text-white font-sans font-medium transition-colors cursor-pointer"
-                              id="btn-copy-webhook-url-tunnel"
-                            >
-                              Copiar
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                          <span className="text-[11px] font-semibold text-amber-400 block">Carregando Túnel de Conexão...</span>
-                          <p className="text-[10px] text-slate-400 mt-0.5">
-                            Aguarde um instante para que possamos conectar o seu servidor a um endereço público seguro para a Meta.
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="pt-2 border-t border-slate-800/60">
-                        <span className="text-[11px] font-semibold text-slate-400 block">Opção 2: URL de Produção do AI Studio</span>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          Esta é a URL interna do projeto. Nota: ela requer login com sua conta do Google e é bloqueada pela Meta por segurança. Recomendamos utilizar a **Opção 1** para testes e uso real.
+                      <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                        <span className="text-[11px] font-semibold text-emerald-400 block flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                          URL de Produção do Webhook
+                        </span>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          Cole esta URL nas configurações de Webhooks do seu painel do Chatwoot para encaminhar as mensagens de entrada ao robô.
                         </p>
-                        <div className="flex items-center gap-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800 font-mono text-xs text-slate-300 mt-1.5" id="webhook-url-prod">
-                          <span className="truncate flex-1 select-all text-[11px]">
-                            {window.location.origin.includes("-dev-") 
-                              ? window.location.origin.replace("-dev-", "-pre-") 
-                              : window.location.origin}/api/webhook/whatsapp
+                        <div className="flex items-center gap-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800 font-mono text-xs text-slate-300 mt-2" id="webhook-url-prod">
+                          <span className="truncate flex-1 select-all text-[11px] text-emerald-300 font-semibold">
+                            {window.location.origin.includes("localhost") || window.location.origin.includes("-dev-")
+                              ? "https://app.andmicrocell.com.br/api/webhook/whatsapp"
+                              : `${window.location.origin}/api/webhook/whatsapp`}
                           </span>
                           <button 
                             onClick={() => {
-                              const publicUrl = window.location.origin.includes("-dev-") 
-                                ? window.location.origin.replace("-dev-", "-pre-") 
-                                : window.location.origin;
-                              navigator.clipboard.writeText(`${publicUrl}/api/webhook/whatsapp`);
-                              alert("URL de Produção padrão copiada!");
+                              const publicUrl = window.location.origin.includes("localhost") || window.location.origin.includes("-dev-")
+                                ? "https://app.andmicrocell.com.br/api/webhook/whatsapp"
+                                : `${window.location.origin}/api/webhook/whatsapp`;
+                              navigator.clipboard.writeText(publicUrl);
+                              alert("URL do Webhook copiada para a área de transferência!");
                             }}
-                            className="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-[10px] text-white font-sans font-medium transition-colors cursor-pointer"
-                            id="btn-copy-webhook-url-prod"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[10px] text-white font-sans font-medium transition-colors cursor-pointer"
+                            id="btn-copy-webhook-url"
                           >
-                            Copiar
+                            Copiar URL
                           </button>
                         </div>
                       </div>
                     </div>
-                    
-                    <p className="text-[10px] text-slate-400/90 pt-1 border-t border-indigo-500/10 flex items-start gap-1">
-                      <span>⚠️</span>
-                      <span><strong>Muito Importante na Meta:</strong> Certifique-se de assinar o campo <strong>messages</strong> na tabela de campos do Webhook no painel da Meta. Sem assinar <em>messages</em>, a Meta não nos enviará as mensagens dos clientes!</span>
-                    </p>
                   </div>
 
                   {/* Settings Form */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="integration-form">
-                    <div className="md:col-span-2" id="fld-verify-token">
-                      <label className="block text-xs font-mono text-slate-400 mb-1.5 flex justify-between items-center">
-                        <span>Token de Verificação (Verify Token)</span>
-                        <span className="text-[10px] text-slate-500 font-sans">Escolha uma senha para validar o webhook</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={config.whatsappVerifyToken || "zetachat_secret_token"}
-                        onChange={(e) => handleSaveConfig({ whatsappVerifyToken: e.target.value })}
-                        placeholder="Ex: minha_senha_secreta_whatsapp"
-                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm font-mono focus:outline-none focus:border-indigo-500"
-                        id="input-verify-token"
-                      />
-                    </div>
+                  <div className="space-y-6" id="integration-forms">
+                    {/* Chatwoot Config */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">Configurações de Conexão</h4>
+                        <div className="flex items-center gap-2" id="toggle-whatsapp-integration">
+                          <span className="text-[10px] font-mono text-slate-400">Responder Automaticamente</span>
+                          <button
+                            onClick={() => handleSaveConfig({ autoRespondWhatsApp: !config.autoRespondWhatsApp })}
+                            className={`w-10 h-5.5 rounded-full p-0.5 transition-colors cursor-pointer ${config.autoRespondWhatsApp ? 'bg-indigo-600' : 'bg-slate-800'}`}
+                            id="btn-toggle-auto-whatsapp-int"
+                          >
+                            <div className={`w-4.5 h-4.5 rounded-full bg-white transition-transform ${config.autoRespondWhatsApp ? 'translate-x-4.5' : ''}`}></div>
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="chatwoot-form">
+                        <div id="fld-chatwoot-url" className="md:col-span-2">
+                          <label className="block text-xs font-mono text-slate-400 mb-1.5 flex justify-between items-center">
+                            <span>URL da sua Instância do Chatwoot</span>
+                            <span className="text-[10px] text-slate-500 font-sans">Sua instalação do Chatwoot</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={localChatwootUrl}
+                            onChange={(e) => setLocalChatwootUrl(e.target.value)}
+                            placeholder="Ex: https://atendimento.andmicrocell.com.br"
+                            className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 font-mono"
+                            id="input-chatwoot-url"
+                          />
+                        </div>
 
-                    <div id="fld-phone-id">
-                      <label className="block text-xs font-mono text-slate-400 mb-1.5">ID do Número de Telefone (Phone Number ID)</label>
-                      <input
-                        type="text"
-                        value={config.whatsappPhoneNumberId || ""}
-                        onChange={(e) => handleSaveConfig({ whatsappPhoneNumberId: e.target.value })}
-                        placeholder="ID numérico de telefone gerado pela Meta"
-                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"
-                        id="input-phone-number-id"
-                      />
-                    </div>
+                        <div id="fld-chatwoot-token" className="md:col-span-2">
+                          <label className="block text-xs font-mono text-slate-400 mb-1.5 flex justify-between items-center">
+                            <span>Token de Acesso do Agente (api_access_token)</span>
+                            <span className="text-[10px] text-slate-500 font-sans">Token para o robô poder enviar respostas</span>
+                          </label>
+                          <input
+                            type="password"
+                            value={localChatwootToken}
+                            onChange={(e) => setLocalChatwootToken(e.target.value)}
+                            placeholder="Insira o seu api_access_token do Chatwoot"
+                            className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 font-mono"
+                            id="input-chatwoot-token"
+                          />
+                          <p className="text-[10px] text-amber-500 mt-1.5 leading-relaxed" id="chatwoot-token-warning-note">
+                            ⚠️ <strong>Atenção:</strong> NÃO cole o "Segredo do Webhook" aqui. Esse campo exige o seu <strong>Token de Acesso à API do Usuário</strong> pessoal, obtido no menu de Configurações de Perfil (canto inferior esquerdo no Chatwoot) rolando a tela até o final.
+                          </p>
+                        </div>
+                      </div>
 
-                    <div id="fld-access-token">
-                      <label className="block text-xs font-mono text-slate-400 mb-1.5">Token de Acesso (Permanent Access Token)</label>
-                      <input
-                        type="password"
-                        value={config.whatsappAccessToken || ""}
-                        onChange={(e) => handleSaveConfig({ whatsappAccessToken: e.target.value })}
-                        placeholder="Token permanente EAAB..."
-                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 font-mono"
-                        id="input-access-token"
-                      />
-                    </div>
-                  </div>
+                      {/* Botão de Salvar Conexão do Chatwoot com feedback visual */}
+                      <div className="pt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-slate-800/40 mt-2" id="chatwoot-save-container">
+                        <div className="flex flex-wrap gap-2.5">
+                          <button
+                            onClick={handleSaveChatwootDetails}
+                            disabled={isSavingChatwoot}
+                            className={`px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                              isSavingChatwoot
+                                ? 'bg-slate-800 text-slate-500'
+                                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10'
+                            }`}
+                            id="btn-save-chatwoot-details"
+                          >
+                            {isSavingChatwoot ? (
+                              <>
+                                <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" id="spin-save-chatwoot"></div>
+                                <span>Salvando Integração...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" id="svg-save-chatwoot">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>Salvar Configurações</span>
+                              </>
+                            )}
+                          </button>
 
-                  <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800 text-xs text-slate-400 space-y-2" id="gmb-guide-block">
-                    <p className="font-semibold text-slate-300">Como obter essas credenciais oficiais da Meta?</p>
-                    <ol className="list-decimal pl-4 space-y-1.5 text-[11px]">
-                      <li>Acesse o portal <a href="https://developers.facebook.com/" target="_blank" className="text-indigo-400 hover:underline">Meta for Developers</a> e crie ou selecione um aplicativo de Negócios.</li>
-                      <li>Adicione o produto <strong>WhatsApp</strong> ao seu aplicativo de negócios.</li>
-                      <li>Vá em <strong>Configuração do WhatsApp</strong> para encontrar o seu <em>Phone Number ID</em> temporário ou permanente.</li>
-                      <li>No menu lateral, vá em <strong>Webhooks</strong>, selecione <em>WhatsApp Business Account</em>, configure a URL acima e cole o mesmo <em>Verify Token</em> digitado acima.</li>
-                      <li>Inscreva-se nos campos de Webhook de <strong>messages</strong> para receber os chats.</li>
-                    </ol>
+                          <button
+                            onClick={handleTestChatwootConnection}
+                            disabled={isTestingChatwoot || !localChatwootUrl || !localChatwootToken}
+                            className={`px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer border ${
+                              isTestingChatwoot
+                                ? 'bg-slate-800 text-slate-500 border-transparent'
+                                : !localChatwootUrl || !localChatwootToken
+                                ? 'bg-slate-900 text-slate-600 border-slate-800 cursor-not-allowed'
+                                : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                            }`}
+                            id="btn-test-chatwoot-details"
+                          >
+                            {isTestingChatwoot ? (
+                              <>
+                                <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" id="spin-test-chatwoot"></div>
+                                <span>Testando Conexão...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" id="svg-test-chatwoot">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                <span>Testar Conexão</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {showSavedChatwootSuccess && (
+                          <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-medium animate-pulse" id="chatwoot-save-success-indicator">
+                            <svg className="w-4 h-4 text-emerald-400 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>Integração salva com sucesso!</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Resultado do Teste de Conexão */}
+                      {chatwootTestResult && (
+                        <div 
+                          className={`p-3.5 rounded-xl text-xs flex gap-2.5 border ${
+                            chatwootTestResult.success 
+                              ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-400' 
+                              : 'bg-rose-950/20 border-rose-500/30 text-rose-400'
+                          }`} 
+                          id="chatwoot-test-result"
+                        >
+                          <div className="mt-0.5">
+                            {chatwootTestResult.success ? (
+                              <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-semibold">{chatwootTestResult.success ? "Conexão Estabelecida!" : "Erro de Conexão:"}</p>
+                            <p className="mt-1 text-[11px] leading-relaxed opacity-90">{chatwootTestResult.message}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-800/30 text-xs text-slate-400 space-y-2" id="chatwoot-guide-block">
+                        <p className="font-semibold text-slate-300">Como obter o Token e configurar o Chatwoot?</p>
+                        <ol className="list-decimal pl-4 space-y-1.5 text-[11px] leading-relaxed">
+                          <li>No seu painel do Chatwoot, clique em <strong>Configurações do Perfil</strong> (no menu com o seu nome, no canto inferior esquerdo).</li>
+                          <li>Role a página até o final e copie o seu **Token de Acesso à API** (Access Token).</li>
+                          <li>Cole o token no campo acima.</li>
+                          <li>No menu lateral do Chatwoot, acesse <strong>Integrações</strong> &gt; <strong>Webhooks</strong>.</li>
+                          <li>Adicione um novo webhook contendo a **URL do Webhook do seu Robô** mostrada no topo desta seção.</li>
+                          <li>Selecione exclusivamente o evento <strong>message_created</strong> e salve. Pronto! O fluxo agora é 100% direto.</li>
+                        </ol>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -2365,7 +2605,7 @@ export default function App() {
                     <div className="flex items-center justify-between" id="logs-title-row">
                       <div>
                         <h3 className="font-display font-semibold text-base text-white" id="webhook-logs-title">Monitor de Webhook</h3>
-                        <p className="text-xs text-slate-500 mt-1" id="webhook-logs-subtitle">Transações recebidas em tempo real do WhatsApp oficial.</p>
+                        <p className="text-xs text-slate-500 mt-1" id="webhook-logs-subtitle">Transações processadas do Chatwoot em tempo real.</p>
                       </div>
                       <button 
                         onClick={fetchWebhookLogs}
@@ -2380,7 +2620,7 @@ export default function App() {
                     <div className="space-y-2.5 overflow-y-auto max-h-[400px] pr-1 font-mono text-[11px]" id="webhook-logs-scroll">
                       {webhookLogs.length === 0 ? (
                         <div className="text-center py-8 text-slate-600 font-sans" id="no-webhook-logs">
-                          Nenhum evento registrado ainda. Envie uma mensagem de teste no seu número do WhatsApp.
+                          Nenhum evento registrado ainda. Envie uma mensagem no seu número do WhatsApp para ver as requisições chegando.
                         </div>
                       ) : (
                         webhookLogs.map((log) => {
