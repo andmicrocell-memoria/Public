@@ -1,0 +1,76 @@
+{
+  "chatwootUrl": "https://atendimento.andmicrocell.com.br",
+  "businessHours": "Segunda a Sexta: 08h às 12h das 14h as 18h ",
+  "name": "AndMicrocell - Assistência Técnica",
+  "address": "Travessa das Flores, 167 Salgado  Caruaru/PE",
+  "specialOffers": "Película de vidro grátis na troca de qualquer tela | Orçamento 100% gratuito!",
+  "testimonials": [
+    {
+      "role": "Proprietário de iPhone 13 Pro",
+      "date": "Há 2 dias",
+      "rating": 5,
+      "id": "t-1",
+      "name": "João Pedro",
+      "text": "Excelente trabalho na troca de tela do meu iPhone 13 Pro. Ficou perfeito, com True Tone ativo e me deram película de brinde. Atendimento de primeira em Caruaru!",
+      "avatar": "JP"
+    },
+    {
+      "rating": 5,
+      "role": "Cliente de Caruaru",
+      "date": "Há 1 semana",
+      "id": "t-2",
+      "text": "Levei meu celular que tinha caído na água e outra assistência disse que não tinha conserto. O pessoal da AndMicrocell ressuscitou a placa! Nota 10 pelo profissionalismo e agilidade.",
+      "name": "Mariana Souza",
+      "avatar": "MS"
+    },
+    {
+      "id": "t-3",
+      "date": "Há 3 dias",
+      "role": "Cliente Satisfeito",
+      "rating": 5,
+      "text": "Troquei a bateria do meu aparelho. Serviço super rápido, preço justo e garantia de verdade. Recomendo demais para quem busca confiança e qualidade em Caruaru.",
+      "name": "Carlos Eduardo",
+      "avatar": "CE"
+    },
+    {
+      "text": "Atendimento impecável! O orçamento é de fato gratuito e explicaram tudo certinho antes de mexer no aparelho. O celular ficou novinho e o pós-venda deles é sensacional.",
+      "avatar": "AB",
+      "name": "Ana Beatriz",
+      "id": "t-4",
+      "date": "Há 5 dias",
+      "role": "Cliente",
+      "rating": 5
+    }
+  ],
+  "tone": "friendly",
+  "whatsappVerifyToken": "andersonti2026",
+  "phone": "+55 81 98182-6072",
+  "whatsappPhoneNumberId": "1256883267499769",
+  "whatsappAccessToken": "EAArWaUJyWxoBSNvKmTb4jByCpe7KxgmXJFBbn0ZAkpgBcfypVC03ZBfi4k3ZCrEt4VtOXjc7YHWHEk0SuXCylFts6pBRxdG6RvODZCjDg5OrXjNj4yFDhLWdjLCrGEzGBfCOazfsdAirZAaTsh8adZApKNLkyZANuB2Eu4sQOCDZCqnkD5EdaWKuXZC7hWzjiTQZDZD",
+  "autoRespondReviews": true,
+  "autoRespondWhatsApp": true,
+  "category": "Especialista em iPhone e Assistência Técnica Completa de Notebooks, Computadores e Smartphones",
+  "mutedPhones": [],
+  "faqs": [
+    {
+      "question": "Quanto tempo demora para trocar a tela do celular?",
+      "id": "faq-1",
+      "answer": "Geralmente realizamos a troca de tela em até 2 hours para os modelos mais comuns (iPhone, Samsung, Motorola). Entre em contato para confirmar a disponibilidade da peça em estoque!"
+    },
+    {
+      "id": "faq-2",
+      "answer": "Sim! Oferecemos garantia completa em todos os nossos serviços e peças substituídas. Dependendo do tipo de reparo e componente utilizado, oferecemos prazos de garantia de 90, 180 ou até 360 dias contra qualquer defeito de fabricação, assegurando total cuidado e tranquilidade para o seu aparelho.",
+      "question": "Vocês dão garantia nos consertos?"
+    },
+    {
+      "id": "faq-3",
+      "answer": "Sim! Não cobramos taxa de avaliação. O orçamento para o conserto do seu celular, tablet ou notebook é 100% gratuito e sem compromisso.",
+      "question": "Vocês fazem orçamento gratuito?"
+    },
+    {
+      "id": "faq-4",
+      "answer": "Fazemos sim! Realizamos desoxidação química em aparelhos que caíram na água e também reparos avançados de microssolda em placas-mãe.",
+      "question": "Fazem reparos em placas e aparelhos molhados?"
+    }
+  ],
+  "chatwootApiAccessToken": "Q1DpLpBXSGYWVP7VGunkEkwL"
