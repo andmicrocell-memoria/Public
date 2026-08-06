@@ -412,6 +412,12 @@ export default function App() {
   const [pricingNotes, setPricingNotes] = useState("");
   const [pricingCategory, setPricingCategory] = useState<'iphone' | 'android' | 'notebook' | 'other'>("iphone");
   const [editingPricingId, setEditingPricingId] = useState<string | null>(null);
+
+  // States for Cascading Supplier Price Calculator
+  const [calcCostPrice, setCalcCostPrice] = useState<string>("");
+  const [calcProfitMargin, setCalcProfitMargin] = useState<number>(50);
+  const [calcOpMargin, setCalcOpMargin] = useState<number>(40);
+  const [calcRound, setCalcRound] = useState<boolean>(true);
   
   const [activeTestimonialName, setActiveTestimonialName] = useState("");
   const [activeTestimonialRole, setActiveTestimonialRole] = useState("");
@@ -2671,100 +2677,271 @@ export default function App() {
                 className="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full"
                 id="pricing-tab-panel"
               >
-                {/* Form to Add/Edit Price */}
-                <div className="lg:col-span-1 p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 h-fit space-y-6" id="pricing-form-panel">
-                  <div>
-                    <h3 className="font-display font-semibold text-base text-white flex items-center gap-2" id="pricing-form-title">
-                      <Sparkles className="w-5 h-5 text-emerald-400" />
-                      {editingPricingId ? "Editar Preço de Serviço" : "Adicionar Novo Preço"}
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1" id="pricing-form-subtitle">
-                      Preencha os campos para alimentar o banco de dados que a IA utilizará para responder orçamentos.
-                    </p>
+                {/* Left Column: Form, Calculator and Guides */}
+                <div className="lg:col-span-1 space-y-6 flex flex-col" id="pricing-left-column">
+                  {/* Form to Add/Edit Price */}
+                  <div className="p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 h-fit space-y-6" id="pricing-form-panel">
+                    <div>
+                      <h3 className="font-display font-semibold text-base text-white flex items-center gap-2" id="pricing-form-title">
+                        <Sparkles className="w-5 h-5 text-emerald-400" />
+                        {editingPricingId ? "Editar Preço de Serviço" : "Adicionar Novo Preço"}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1" id="pricing-form-subtitle">
+                        Preencha os campos para alimentar o banco de dados que a IA utilizará para responder orçamentos.
+                      </p>
+                    </div>
+
+                    <div className="space-y-4" id="pricing-form-body">
+                      <div className="space-y-1.5" id="group-pricing-category">
+                        <label className="text-xs text-slate-400 font-medium">Categoria do Aparelho</label>
+                        <select
+                          value={pricingCategory}
+                          onChange={(e) => setPricingCategory(e.target.value as any)}
+                          className="w-full bg-[#131a2c] text-slate-200 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                          id="select-pricing-category"
+                        >
+                          <option value="iphone">Apple (iPhone)</option>
+                          <option value="android">Celulares Android (Samsung/Motorola/etc)</option>
+                          <option value="notebook">Notebooks & Computadores</option>
+                          <option value="other">Outros Serviços (Desoxidação/Placas)</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5" id="group-pricing-model">
+                        <label className="text-xs text-slate-400 font-medium">Modelo do Aparelho</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: iPhone 11, Samsung S21, MacBook Pro 2020"
+                          value={pricingDeviceModel}
+                          onChange={(e) => setPricingDeviceModel(e.target.value)}
+                          className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                          id="input-pricing-model"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5" id="group-pricing-service">
+                        <label className="text-xs text-slate-400 font-medium">Serviço Realizado</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Troca de Tela Premium (OLED), Upgrade SSD"
+                          value={pricingServiceName}
+                          onChange={(e) => setPricingServiceName(e.target.value)}
+                          className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                          id="input-pricing-service"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5" id="group-pricing-estimate">
+                        <label className="text-xs text-slate-400 font-medium">Estimativa de Preço / Faixa</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: A partir de R$ 320, R$ 150 - R$ 220"
+                          value={pricingEstimate}
+                          onChange={(e) => setPricingEstimate(e.target.value)}
+                          className="w-full bg-[#131a2c] text-emerald-400 placeholder-slate-600 border border-slate-800 rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-indigo-500 outline-none"
+                          id="input-pricing-estimate"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5" id="group-pricing-notes">
+                        <label className="text-xs text-slate-400 font-medium">Diferenciais / Notas de Qualidade (Opcional)</label>
+                        <textarea
+                          rows={3}
+                          placeholder="Ex: Tela OLED premium, mantém True Tone ativo, inclui película de vidro de brinde e garantia de 6 meses."
+                          value={pricingNotes}
+                          onChange={(e) => setPricingNotes(e.target.value)}
+                          className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl p-3 text-xs focus:ring-1 focus:ring-indigo-500 outline-none resize-none leading-relaxed"
+                          id="textarea-pricing-notes"
+                        />
+                      </div>
+
+                      <div className="pt-2 flex gap-3" id="pricing-form-actions">
+                        <button
+                          onClick={handleSavePricingItem}
+                          disabled={!pricingDeviceModel.trim() || !pricingServiceName.trim() || !pricingEstimate.trim()}
+                          className="flex-1 py-3 px-4 rounded-xl text-white font-semibold text-xs shadow-lg shadow-indigo-600/10 transition-colors disabled:opacity-40 bg-indigo-600 hover:bg-indigo-500 cursor-pointer"
+                          id="btn-save-pricing"
+                        >
+                          {editingPricingId ? "Salvar Alterações" : "Cadastrar Preço"}
+                        </button>
+                        {editingPricingId && (
+                          <button
+                            onClick={handleCancelEditPricingItem}
+                            className="py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+                            id="btn-cancel-pricing-edit"
+                          >
+                            Cancelar
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-4" id="pricing-form-body">
-                    <div className="space-y-1.5" id="group-pricing-category">
-                      <label className="text-xs text-slate-400 font-medium">Categoria do Aparelho</label>
-                      <select
-                        value={pricingCategory}
-                        onChange={(e) => setPricingCategory(e.target.value as any)}
-                        className="w-full bg-[#131a2c] text-slate-200 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                        id="select-pricing-category"
-                      >
-                        <option value="iphone">Apple (iPhone)</option>
-                        <option value="android">Celulares Android (Samsung/Motorola/etc)</option>
-                        <option value="notebook">Notebooks & Computadores</option>
-                        <option value="other">Outros Serviços (Desoxidação/Placas)</option>
-                      </select>
+                  {/* Cascading Supplier Price Calculator */}
+                  <div className="p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 space-y-5" id="pricing-calculator-panel">
+                    <div>
+                      <h3 className="font-display font-semibold text-sm text-white flex items-center gap-2 animate-pulse" id="pricing-calc-title">
+                        <span className="text-emerald-400 text-base">💰</span>
+                        Calculadora de Margem em Cascata
+                      </h3>
+                      <p className="text-[10px] text-slate-400 mt-1" id="pricing-calc-subtitle">
+                        Fórmula Oficial: <span className="text-indigo-400 font-mono">(Peça + {calcProfitMargin}%) + {calcOpMargin}%</span>. Evite erros de margem linear.
+                      </p>
                     </div>
 
-                    <div className="space-y-1.5" id="group-pricing-model">
-                      <label className="text-xs text-slate-400 font-medium">Modelo do Aparelho</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: iPhone 11, Samsung S21, MacBook Pro 2020"
-                        value={pricingDeviceModel}
-                        onChange={(e) => setPricingDeviceModel(e.target.value)}
-                        className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                        id="input-pricing-model"
-                      />
-                    </div>
+                    <div className="space-y-3.5" id="pricing-calc-body">
+                      <div className="space-y-1.5" id="group-calc-cost">
+                        <label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Custo da Peça no Fornecedor (R$)</label>
+                        <input
+                          type="number"
+                          placeholder="Ex: 100"
+                          value={calcCostPrice}
+                          onChange={(e) => setCalcCostPrice(e.target.value)}
+                          className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                          id="input-calc-cost"
+                        />
+                      </div>
 
-                    <div className="space-y-1.5" id="group-pricing-service">
-                      <label className="text-xs text-slate-400 font-medium">Serviço Realizado</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Troca de Tela Premium (OLED), Upgrade SSD"
-                        value={pricingServiceName}
-                        onChange={(e) => setPricingServiceName(e.target.value)}
-                        className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                        id="input-pricing-service"
-                      />
-                    </div>
+                      <div className="grid grid-cols-2 gap-3" id="group-calc-margins">
+                        <div className="space-y-1" id="group-calc-profit">
+                          <label className="text-[9px] text-slate-400 font-medium">Margem de Lucro (%)</label>
+                          <input
+                            type="number"
+                            value={calcProfitMargin}
+                            onChange={(e) => setCalcProfitMargin(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-[#131a2c] text-slate-200 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                            id="input-calc-profit-margin"
+                          />
+                        </div>
+                        <div className="space-y-1" id="group-calc-op">
+                          <label className="text-[9px] text-slate-400 font-medium">Margem Operacional (%)</label>
+                          <input
+                            type="number"
+                            value={calcOpMargin}
+                            onChange={(e) => setCalcOpMargin(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-[#131a2c] text-slate-200 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                            id="input-calc-op-margin"
+                          />
+                        </div>
+                      </div>
 
-                    <div className="space-y-1.5" id="group-pricing-estimate">
-                      <label className="text-xs text-slate-400 font-medium">Estimativa de Preço / Faixa</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: A partir de R$ 320, R$ 150 - R$ 220"
-                        value={pricingEstimate}
-                        onChange={(e) => setPricingEstimate(e.target.value)}
-                        className="w-full bg-[#131a2c] text-emerald-400 placeholder-slate-600 border border-slate-800 rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-indigo-500 outline-none"
-                        id="input-pricing-estimate"
-                      />
-                    </div>
+                      <div className="flex items-center gap-2 bg-[#131a2c]/30 p-2 rounded-xl border border-slate-900" id="group-calc-round">
+                        <input
+                          type="checkbox"
+                          checked={calcRound}
+                          onChange={(e) => setCalcRound(e.target.checked)}
+                          className="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-[#131a2c] cursor-pointer"
+                          id="chk-calc-round"
+                        />
+                        <label htmlFor="chk-calc-round" className="text-[10px] text-slate-300 cursor-pointer select-none">
+                          Arredondar preço final para múltiplos de R$ 5
+                        </label>
+                      </div>
 
-                    <div className="space-y-1.5" id="group-pricing-notes">
-                      <label className="text-xs text-slate-400 font-medium">Diferenciais / Notas de Qualidade (Opcional)</label>
-                      <textarea
-                        rows={3}
-                        placeholder="Ex: Tela OLED premium, mantém True Tone ativo, inclui película de vidro de brinde e garantia de 6 meses."
-                        value={pricingNotes}
-                        onChange={(e) => setPricingNotes(e.target.value)}
-                        className="w-full bg-[#131a2c] text-slate-200 placeholder-slate-600 border border-slate-800 rounded-xl p-3 text-xs focus:ring-1 focus:ring-indigo-500 outline-none resize-none leading-relaxed"
-                        id="textarea-pricing-notes"
-                      />
-                    </div>
-
-                    <div className="pt-2 flex gap-3" id="pricing-form-actions">
-                      <button
-                        onClick={handleSavePricingItem}
-                        disabled={!pricingDeviceModel.trim() || !pricingServiceName.trim() || !pricingEstimate.trim()}
-                        className="flex-1 py-3 px-4 rounded-xl text-white font-semibold text-xs shadow-lg shadow-indigo-600/10 transition-colors disabled:opacity-40 bg-indigo-600 hover:bg-indigo-500 cursor-pointer"
-                        id="btn-save-pricing"
-                      >
-                        {editingPricingId ? "Salvar Alterações" : "Cadastrar Preço"}
-                      </button>
-                      {editingPricingId && (
-                        <button
-                          onClick={handleCancelEditPricingItem}
-                          className="py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
-                          id="btn-cancel-pricing-edit"
-                        >
-                          Cancelar
-                        </button>
+                      {/* Mathematics Visualization */}
+                      {parseFloat(calcCostPrice) > 0 && (
+                        <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-xs space-y-2.5" id="pricing-calc-results">
+                          <div className="flex justify-between items-center text-slate-400 text-[10px]" id="calc-step-1">
+                            <span>Etapa 1: Custo + Lucro (+{calcProfitMargin}%):</span>
+                            <span className="font-mono text-slate-200 font-medium">
+                              R$ {(parseFloat(calcCostPrice) * (1 + calcProfitMargin/100)).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-slate-400 text-[10px]" id="calc-step-2">
+                            <span>Etapa 2: Subtotal + Operacional (+{calcOpMargin}%):</span>
+                            <span className="font-mono text-slate-200 font-medium">
+                              R$ {((parseFloat(calcCostPrice) * (1 + calcProfitMargin/100)) * (1 + calcOpMargin/100)).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="h-px bg-slate-800" />
+                          <div className="flex justify-between items-center" id="calc-step-final">
+                            <span className="font-semibold text-xs text-white">Preço de Venda Sugerido:</span>
+                            <span className="font-extrabold text-sm text-emerald-400 font-mono">
+                              R$ {calcRound 
+                                ? (Math.round(((parseFloat(calcCostPrice) * (1 + calcProfitMargin/100)) * (1 + calcOpMargin/100)) / 5) * 5).toFixed(0)
+                                : ((parseFloat(calcCostPrice) * (1 + calcProfitMargin/100)) * (1 + calcOpMargin/100)).toFixed(2)
+                              }
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] text-slate-400" id="calc-step-profit">
+                            <span>Lucro Bruto (Peça + Mão de Obra):</span>
+                            <span className="font-bold text-emerald-500/90 font-mono">
+                              + R$ {(
+                                (calcRound 
+                                  ? (Math.round(((parseFloat(calcCostPrice) * (1 + calcProfitMargin/100)) * (1 + calcOpMargin/100)) / 5) * 5)
+                                  : ((parseFloat(calcCostPrice) * (1 + calcProfitMargin/100)) * (1 + calcOpMargin/100))
+                                ) - parseFloat(calcCostPrice)
+                              ).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const costVal = parseFloat(calcCostPrice);
+                          if (!costVal) return;
+                          const rawP = (costVal * (1 + calcProfitMargin/100)) * (1 + calcOpMargin/100);
+                          const finalP = calcRound ? Math.round(rawP / 5) * 5 : rawP;
+                          setPricingEstimate(`R$ ${finalP.toFixed(0)}`);
+                          
+                          // Focus the device model input for smooth flow
+                          const el = document.getElementById("input-pricing-model");
+                          if (el) el.focus();
+                        }}
+                        disabled={!calcCostPrice || parseFloat(calcCostPrice) <= 0}
+                        className="w-full py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/15 transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-1.5"
+                        id="btn-apply-calc-price"
+                      >
+                        <span>📋</span> Aplicar Valor Calculado no Formulário
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Standard Pricing Guide / Cheat Sheet */}
+                  <div className="p-5 rounded-3xl bg-[#0b101d] border border-slate-800/60 space-y-4" id="pricing-guide-panel">
+                    <div>
+                      <h4 className="font-display font-semibold text-xs text-white flex items-center gap-2" id="pricing-guide-title">
+                        <span>💡</span>
+                        Regras de Preços de Computadores e PCs
+                      </h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5" id="pricing-guide-subtitle">
+                        Diretrizes de referência rápida para preenchimento ou consulta.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3 text-[11px] text-slate-300 leading-relaxed" id="pricing-guide-content">
+                      <div className="bg-[#131a2c]/30 p-2.5 rounded-xl border border-slate-900 space-y-1">
+                        <p className="font-semibold text-white flex justify-between">
+                          <span>🛠️ Manutenção Preventiva</span>
+                        </p>
+                        <p className="text-slate-400 text-[10px]">
+                          • <strong className="text-slate-300">Notebook Básico:</strong> R$ 90<br />
+                          • <strong className="text-slate-300">Notebook Gamer/Caro:</strong> Sob Consulta (maior risco técnico)<br />
+                          • <strong className="text-slate-300">PC Gamer Completo:</strong> R$ 250 (gabinete 3+ fans, placa offboard, watercooler, etc.)
+                        </p>
+                      </div>
+
+                      <div className="bg-[#131a2c]/30 p-2.5 rounded-xl border border-slate-900 space-y-1">
+                        <p className="font-semibold text-white flex justify-between">
+                          <span>💾 Formatação (Sem Backup)</span>
+                        </p>
+                        <p className="text-slate-400 text-[10px]">
+                          • <strong className="text-slate-300">Formatação Simples:</strong> R$ 90<br />
+                          • <strong className="text-slate-300">Com Backup:</strong> Ver tabela de referência (70GB a 1TB: R$ 110 - R$ 230)
+                        </p>
+                      </div>
+
+                      <div className="bg-[#131a2c]/30 p-2.5 rounded-xl border border-slate-900 space-y-1">
+                        <p className="font-semibold text-white flex justify-between">
+                          <span>⚡ Instalação de Memória / SSD</span>
+                        </p>
+                        <p className="text-slate-400 text-[10px]">
+                          • <strong className="text-slate-300">Aparelho Comum:</strong> R$ 60<br />
+                          • <strong className="text-slate-300">Aparelho Gamer/Complexo:</strong> R$ 150 a R$ 180 (dissipadores, desmontagem robusta)
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
