@@ -55,7 +55,7 @@
     {
       "question": "Quanto tempo demora para trocar a tela do celular?",
       "id": "faq-1",
-      "answer": "Geralmente realizamos a troca de tela em até 2 hours para os modelos mais comuns (iPhone, Samsung, Motorola). Entre em contato para confirmar a disponibilidade da peça em estoque!"
+      "answer": "Geralmente realizamos a troca de tela em até 2 horas para os modelos mais comuns (iPhone, Samsung, Motorola). Entre em contato para confirmar a disponibilidade da peça em estoque!"
     },
     {
       "id": "faq-2",
@@ -63,14 +63,15 @@
       "question": "Vocês dão garantia nos consertos?"
     },
     {
-      "id": "faq-3",
       "answer": "Sim! Não cobramos taxa de avaliação. O orçamento para o conserto do seu celular, tablet ou notebook é 100% gratuito e sem compromisso.",
+      "id": "faq-3",
       "question": "Vocês fazem orçamento gratuito?"
     },
     {
-      "id": "faq-4",
       "answer": "Fazemos sim! Realizamos desoxidação química em aparelhos que caíram na água e também reparos avançados de microssolda em placas-mãe.",
-      "question": "Fazem reparos em placas e aparelhos molhados?"
+      "question": "Fazem reparos em placas e aparelhos molhados?",
+      "id": "faq-4"
     }
   ],
   "chatwootApiAccessToken": "Q1DpLpBXSGYWVP7VGunkEkwL"
+}
