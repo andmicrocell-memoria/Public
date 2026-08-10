@@ -1,0 +1,13 @@
+{
+  "name": "AndMicrocell",
+  "category": "reparo e assistência técnica",
+  "address": "Caruaru, PE",
+  "phone": "+55 81 99999-9999",
+  "businessHours": "Segunda a Sexta: 08h às 12h e das 14h às 18h",
+  "specialOffers": "Atendimento especializado e orçamento gratuito.",
+  "tone": "friendly",
+  "faqs": [],
+  "autoRespondWhatsApp": true,
+  "autoRespondReviews": true,
+  "mutedPhones": []
+}

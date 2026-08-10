@@ -6,11 +6,12 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
 import { initializeApp } from "firebase/app";
+import { loadRuntimeEnv } from "./src/env.js";
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, updateDoc, query, orderBy, limit } from "firebase/firestore";
 import { spawn } from "child_process";
 import { normalizeAudioBase64, normalizeMimeType } from "./src/audio-transcription.js";
 
-dotenv.config();
+loadRuntimeEnv();
 
 // Prevenção de quebra do servidor em produção (Render / Cloud Run) para nunca derrubar o processo Node.js
 process.on('uncaughtException', (err) => {
@@ -568,9 +569,14 @@ async function startServer() {
   let ai: GoogleGenAI | null = null;
   const getGeminiClient = (): GoogleGenAI => {
     if (!ai) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-        throw new Error("GEMINI_API_KEY environment variable is not configured.");
+      const apiKey = [
+        process.env.GEMINI_API_KEY,
+        process.env.GOOGLE_API_KEY,
+        process.env.VITE_GEMINI_API_KEY,
+      ].find((key) => typeof key === "string" && key.trim() && key !== "MY_GEMINI_API_KEY");
+
+      if (!apiKey) {
+        throw new Error("GEMINI_API_KEY/GOOGLE_API_KEY environment variable is not configured.");
       }
       ai = new GoogleGenAI({
         apiKey,
@@ -2419,7 +2425,7 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT} (http://localhost:${PORT})`);
+    console.log(`Server running on port ${PORT} (http://0.0.0.0:${PORT})`);
 
     // Auto Keep-Alive: evita que o servidor entre em repouso (sleep) no Render / nuvens
     const keepAliveUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL;
