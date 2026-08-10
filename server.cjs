@@ -23,14 +23,58 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // server.ts
 var import_express = __toESM(require("express"), 1);
-var import_path = __toESM(require("path"), 1);
+var import_path2 = __toESM(require("path"), 1);
 var import_vite = require("vite");
 var import_genai = require("@google/genai");
-var import_dotenv = __toESM(require("dotenv"), 1);
-var import_fs = __toESM(require("fs"), 1);
+var import_fs2 = __toESM(require("fs"), 1);
 var import_app = require("firebase/app");
+
+// src/env.ts
+var import_fs = __toESM(require("fs"), 1);
+var import_path = __toESM(require("path"), 1);
+var import_dotenv = __toESM(require("dotenv"), 1);
+function loadRuntimeEnv() {
+  const envFiles = [
+    import_path.default.resolve(process.cwd(), ".env.local"),
+    import_path.default.resolve(process.cwd(), ".env")
+  ];
+  for (const envFile of envFiles) {
+    if (import_fs.default.existsSync(envFile)) {
+      import_dotenv.default.config({ path: envFile, override: false });
+    }
+  }
+  return process.env;
+}
+
+// server.ts
 var import_firestore = require("firebase/firestore");
-import_dotenv.default.config();
+
+// src/audio-transcription.ts
+function normalizeAudioBase64(audioBase64) {
+  if (!audioBase64) return "";
+  const withoutPrefix = audioBase64.replace(/^data:audio\/[a-zA-Z0-9.-]+(?:;[a-zA-Z0-9.-=]+)*;base64,/, "");
+  return withoutPrefix.replace(/^data:audio\/[a-zA-Z0-9.-]+;base64,/, "");
+}
+function normalizeMimeType(mimeType) {
+  if (!mimeType) return "audio/webm";
+  const normalized = mimeType.split(";")[0].trim().toLowerCase();
+  if (normalized === "audio/opus" || normalized === "audio/oga" || normalized === "application/ogg" || normalized === "video/ogg") {
+    return "audio/ogg";
+  }
+  if (normalized === "audio/x-m4a" || normalized === "audio/m4a") {
+    return "audio/mp4";
+  }
+  if (normalized === "audio/mpeg") {
+    return "audio/mp3";
+  }
+  if (normalized.startsWith("audio/")) {
+    return normalized;
+  }
+  return "audio/webm";
+}
+
+// server.ts
+loadRuntimeEnv();
 process.on("uncaughtException", (err) => {
   console.error(" [FATAL] Uncaught Exception absorvida pelo servidor:", err);
 });
@@ -60,19 +104,19 @@ var addWebhookLog = (direction, message, details) => {
     });
   }
 };
-var configDir = import_path.default.join(process.cwd(), "data");
-var configFilePath = import_path.default.join(configDir, "config.json");
-var postsFilePath = import_path.default.join(configDir, "posts.json");
+var configDir = import_path2.default.join(process.cwd(), "data");
+var configFilePath = import_path2.default.join(configDir, "config.json");
+var postsFilePath = import_path2.default.join(configDir, "posts.json");
 function ensureConfigDir() {
-  if (!import_fs.default.existsSync(configDir)) {
-    import_fs.default.mkdirSync(configDir, { recursive: true });
+  if (!import_fs2.default.existsSync(configDir)) {
+    import_fs2.default.mkdirSync(configDir, { recursive: true });
   }
 }
 function loadStoredPosts() {
   ensureConfigDir();
-  if (import_fs.default.existsSync(postsFilePath)) {
+  if (import_fs2.default.existsSync(postsFilePath)) {
     try {
-      return JSON.parse(import_fs.default.readFileSync(postsFilePath, "utf8"));
+      return JSON.parse(import_fs2.default.readFileSync(postsFilePath, "utf8"));
     } catch (e) {
       console.error("Error reading posts file:", e);
     }
@@ -82,16 +126,16 @@ function loadStoredPosts() {
 function saveStoredPosts(posts) {
   ensureConfigDir();
   try {
-    import_fs.default.writeFileSync(postsFilePath, JSON.stringify(posts, null, 2), "utf8");
+    import_fs2.default.writeFileSync(postsFilePath, JSON.stringify(posts, null, 2), "utf8");
   } catch (e) {
     console.error("Error writing posts file:", e);
   }
 }
 function loadStoredConfig() {
   ensureConfigDir();
-  if (import_fs.default.existsSync(configFilePath)) {
+  if (import_fs2.default.existsSync(configFilePath)) {
     try {
-      return JSON.parse(import_fs.default.readFileSync(configFilePath, "utf8"));
+      return JSON.parse(import_fs2.default.readFileSync(configFilePath, "utf8"));
     } catch (e) {
       console.error("Error reading config file:", e);
     }
@@ -101,7 +145,7 @@ function loadStoredConfig() {
 function saveStoredConfig(config) {
   ensureConfigDir();
   try {
-    import_fs.default.writeFileSync(configFilePath, JSON.stringify(config, null, 2), "utf8");
+    import_fs2.default.writeFileSync(configFilePath, JSON.stringify(config, null, 2), "utf8");
   } catch (e) {
     console.error("Error writing config file:", e);
   }
@@ -109,10 +153,10 @@ function saveStoredConfig(config) {
 var db = null;
 try {
   let firebaseConfig = null;
-  const firebaseConfigPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
-  if (import_fs.default.existsSync(firebaseConfigPath)) {
+  const firebaseConfigPath = import_path2.default.join(process.cwd(), "firebase-applet-config.json");
+  if (import_fs2.default.existsSync(firebaseConfigPath)) {
     try {
-      firebaseConfig = JSON.parse(import_fs.default.readFileSync(firebaseConfigPath, "utf8"));
+      firebaseConfig = JSON.parse(import_fs2.default.readFileSync(firebaseConfigPath, "utf8"));
       console.log("Firebase config loaded successfully from firebase-applet-config.json");
     } catch (parseErr) {
       console.error("Failed to parse firebase-applet-config.json:", parseErr.message);
@@ -292,6 +336,50 @@ async function runFirebaseMigrations() {
 }
 var inMemoryHistoryCache = {};
 var processedMessageIds = /* @__PURE__ */ new Set();
+async function downloadAudio(rawUrl, baseUrl, apiToken) {
+  if (!rawUrl) {
+    throw new Error("URL de \xE1udio n\xE3o fornecida.");
+  }
+  let targetUrl = rawUrl.trim();
+  if (targetUrl.startsWith("/")) {
+    const cleanBase = (baseUrl || "https://atendimento.andmicrocell.com.br").replace(/\/+$/, "");
+    targetUrl = `${cleanBase}${targetUrl}`;
+  }
+  console.log(`[Audio Downloader] Baixando de: ${targetUrl}`);
+  const isExternalStorage = /^https?:\/\/[^\/]*(s3[.-]|amazonaws\.com|cloudflarestorage\.com|storage\.googleapis\.com|digitaloceanspaces\.com|backblazeb2\.com)/i.test(targetUrl);
+  if (isExternalStorage) {
+    console.log(`[Audio Downloader] Link direto de armazenamento (S3/Cloud). Baixando sem headers extras...`);
+    try {
+      const res2 = await fetch(targetUrl);
+      if (res2.ok) {
+        const arrayBuffer2 = await res2.arrayBuffer();
+        return Buffer.from(arrayBuffer2);
+      }
+    } catch (e) {
+      console.warn(`[Audio Downloader] Falha ao baixar diretamente do S3: ${e.message}`);
+    }
+  }
+  const headers = {};
+  if (apiToken) {
+    headers["api-access-token"] = apiToken;
+  }
+  let res = await fetch(targetUrl, { headers });
+  if (!res.ok) {
+    console.warn(`[Audio Downloader] Falha ao baixar com token da API (Status ${res.status}). Tentando sem headers...`);
+    res = await fetch(targetUrl);
+  }
+  if (!res.ok && apiToken) {
+    console.warn(`[Audio Downloader] Tentando com cabe\xE7alho Bearer...`);
+    res = await fetch(targetUrl, {
+      headers: { "Authorization": `Bearer ${apiToken}` }
+    });
+  }
+  if (!res.ok) {
+    throw new Error(`N\xE3o foi poss\xEDvel baixar o arquivo de \xE1udio. Status retornado: ${res.status}`);
+  }
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
 async function getWhatsAppHistory(fromNumber) {
   const cleanNumber = String(fromNumber).replace(/\D/g, "");
   if (!cleanNumber) return [];
@@ -303,8 +391,8 @@ async function getWhatsAppHistory(fromNumber) {
         const messages = snapshot.data().messages || [];
         try {
           ensureConfigDir();
-          const historyFilePath = import_path.default.join(configDir, `history_${cleanNumber}.json`);
-          import_fs.default.writeFileSync(historyFilePath, JSON.stringify({ messages }, null, 2), "utf8");
+          const historyFilePath = import_path2.default.join(configDir, `history_${cleanNumber}.json`);
+          import_fs2.default.writeFileSync(historyFilePath, JSON.stringify({ messages }, null, 2), "utf8");
         } catch (e) {
         }
         inMemoryHistoryCache[cleanNumber] = messages;
@@ -316,9 +404,9 @@ async function getWhatsAppHistory(fromNumber) {
   }
   try {
     ensureConfigDir();
-    const historyFilePath = import_path.default.join(configDir, `history_${cleanNumber}.json`);
-    if (import_fs.default.existsSync(historyFilePath)) {
-      const fileData = JSON.parse(import_fs.default.readFileSync(historyFilePath, "utf8"));
+    const historyFilePath = import_path2.default.join(configDir, `history_${cleanNumber}.json`);
+    if (import_fs2.default.existsSync(historyFilePath)) {
+      const fileData = JSON.parse(import_fs2.default.readFileSync(historyFilePath, "utf8"));
       const messages = fileData.messages || [];
       inMemoryHistoryCache[cleanNumber] = messages;
       return messages;
@@ -350,16 +438,16 @@ async function saveWhatsAppHistory(fromNumber, messages, customerName) {
   }
   try {
     ensureConfigDir();
-    const historyFilePath = import_path.default.join(configDir, `history_${cleanNumber}.json`);
+    const historyFilePath = import_path2.default.join(configDir, `history_${cleanNumber}.json`);
     let existingData = {};
-    if (import_fs.default.existsSync(historyFilePath)) {
+    if (import_fs2.default.existsSync(historyFilePath)) {
       try {
-        existingData = JSON.parse(import_fs.default.readFileSync(historyFilePath, "utf8"));
+        existingData = JSON.parse(import_fs2.default.readFileSync(historyFilePath, "utf8"));
       } catch (e) {
       }
     }
     const mergedLocal = { ...existingData, ...docData };
-    import_fs.default.writeFileSync(historyFilePath, JSON.stringify(mergedLocal, null, 2), "utf8");
+    import_fs2.default.writeFileSync(historyFilePath, JSON.stringify(mergedLocal, null, 2), "utf8");
   } catch (fileErr) {
     console.error(`Error writing local backup history file for ${cleanNumber}:`, fileErr.message);
   }
@@ -474,9 +562,13 @@ async function startServer() {
   let ai = null;
   const getGeminiClient = () => {
     if (!ai) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-        throw new Error("GEMINI_API_KEY environment variable is not configured.");
+      const apiKey = [
+        process.env.GEMINI_API_KEY,
+        process.env.GOOGLE_API_KEY,
+        process.env.VITE_GEMINI_API_KEY
+      ].find((key) => typeof key === "string" && key.trim() && key !== "MY_GEMINI_API_KEY");
+      if (!apiKey) {
+        throw new Error("GEMINI_API_KEY/GOOGLE_API_KEY environment variable is not configured.");
       }
       ai = new import_genai.GoogleGenAI({
         apiKey,
@@ -744,6 +836,43 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
 9. Responda sempre em Portugu\xEAs do Brasil.
 10. Encerramento Objetivo da Conversa: Quando o cliente se despedir, agradecer ("Obrigado", "Valeu", "Tudo certo", "Entendido", "Tchau", "Boa noite", etc.) ou der sinais claros de que a d\xFAvida foi resolvida e o atendimento se encerrou, responda de forma final, extremamente direta, amig\xE1vel e objetiva. NUNCA fa\xE7a novas perguntas redundantes ("Posso ajudar em algo mais?") ou tente prolongar a conversa desnecessariamente. Apenas agrade\xE7a, deseje um excelente dia/noite ou agende um hor\xE1rio para ele trazer o aparelho, e encerre por ali.`;
   };
+  app.post("/api/agent/transcribe-audio", async (req, res) => {
+    try {
+      const { audioBase64, mimeType = "audio/webm" } = req.body;
+      if (!audioBase64) {
+        return res.status(400).json({ error: "Nenhum dado de \xE1udio fornecido." });
+      }
+      const cleanBase64 = normalizeAudioBase64(audioBase64);
+      const cleanMimeType = normalizeMimeType(mimeType);
+      if (!cleanBase64) {
+        return res.status(400).json({ error: "O payload de \xE1udio est\xE1 vazio ou inv\xE1lido." });
+      }
+      const client = getGeminiClient();
+      const response = await client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          {
+            inlineData: {
+              data: cleanBase64,
+              mimeType: cleanMimeType
+            }
+          },
+          "Transcreva este \xE1udio em portugu\xEAs brasileiro de forma extremamente limpa, natural e fiel. Retorne APENAS a transcri\xE7\xE3o literal do \xE1udio falado, sem adicionar nenhuma explica\xE7\xE3o, sem aspas, sem prefixos ou coment\xE1rios adicionais."
+        ]
+      });
+      const transcription = (response.text || "").trim();
+      return res.json({
+        success: true,
+        transcription: transcription || "\xC1udio recebido (sem fala compreens\xEDvel)"
+      });
+    } catch (err) {
+      console.error("[Transcribe Audio API Error]:", err.message);
+      return res.status(500).json({
+        success: false,
+        error: err.message || "Falha ao transcrever o \xE1udio."
+      });
+    }
+  });
   app.post("/api/agent/chat", async (req, res) => {
     try {
       const { config, messages } = req.body;
@@ -861,6 +990,13 @@ Coment\xE1rio: "${comment || "Sem coment\xE1rio escrito, apenas atribuiu estrela
     }
     return res.status(404).json({ error: "Configura\xE7\xE3o n\xE3o encontrada" });
   });
+  app.get("/api/tunnel", (req, res) => {
+    const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+    const host = req.headers["x-forwarded-host"] || req.get("host") || "";
+    const baseUrl = `${protocol}://${host}`;
+    const url = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || baseUrl;
+    res.json({ url });
+  });
   const handlePrivacyRequest = async (req, res) => {
     const config = await getFirebaseConfig() || { name: "AndMicrocell - Assist\xEAncia T\xE9cnica" };
     const companyName = config.name || "AndMicrocell - Assist\xEAncia T\xE9cnica";
@@ -976,12 +1112,12 @@ Coment\xE1rio: "${comment || "Sem coment\xE1rio escrito, apenas atribuiu estrela
   app.get("/privacy", handlePrivacyRequest);
   app.get("/politica", handlePrivacyRequest);
   app.get("/meta-icon.jpg", (req, res) => {
-    const iconPath = import_path.default.join(process.cwd(), "src", "assets", "images", "andmicrocell_meta_icon_1783827325456.jpg");
+    const iconPath = import_path2.default.join(process.cwd(), "src", "assets", "images", "andmicrocell_meta_icon_1783827325456.jpg");
     res.setHeader("Content-Type", "image/jpeg");
     res.sendFile(iconPath);
   });
   app.get("/meta-icon.png", (req, res) => {
-    const iconPath = import_path.default.join(process.cwd(), "src", "assets", "images", "andmicrocell_meta_icon_png_1783828881971.jpg");
+    const iconPath = import_path2.default.join(process.cwd(), "src", "assets", "images", "andmicrocell_meta_icon_png_1783828881971.jpg");
     res.setHeader("Content-Type", "image/png");
     res.sendFile(iconPath);
   });
@@ -1458,15 +1594,15 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
         }
       }
       try {
-        if (import_fs.default.existsSync(configDir)) {
-          const files = import_fs.default.readdirSync(configDir);
+        if (import_fs2.default.existsSync(configDir)) {
+          const files = import_fs2.default.readdirSync(configDir);
           for (const file of files) {
             if (file.startsWith("history_") && file.endsWith(".json")) {
               const cleanNumber = file.replace("history_", "").replace(".json", "");
               if (sessionsMap.has(cleanNumber)) continue;
-              const filePath = import_path.default.join(configDir, file);
+              const filePath = import_path2.default.join(configDir, file);
               try {
-                const fileData = JSON.parse(import_fs.default.readFileSync(filePath, "utf8"));
+                const fileData = JSON.parse(import_fs2.default.readFileSync(filePath, "utf8"));
                 const messages = fileData.messages || [];
                 sessionsMap.set(cleanNumber, {
                   id: `session-${cleanNumber}`,
@@ -1581,13 +1717,28 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
       }
       const rawMessageId = body.id ? String(body.id) : null;
       const messageId = rawMessageId ? `cw-${rawMessageId}` : `cw-${Date.now()}`;
-      const messageText = body.content || "";
+      let messageText = body.content || "";
       const chatwootAccountId = body.account?.id || body.account_id;
       const chatwootConversationId = body.conversation?.id || body.conversation_id;
       const customerName = body.sender?.name || body.contact?.name || body.conversation?.contact?.name || "Cliente Chatwoot";
       const fromNumber = body.contact?.phone_number || body.sender?.phone_number || body.conversation?.contact?.phone_number || `cw-${chatwootConversationId}`;
-      if (!messageText || !messageText.trim()) {
-        console.log("[Chatwoot Webhook] Ignorando mensagem vazia ou sem texto.");
+      const attachments = [
+        ...Array.isArray(body?.attachments) ? body.attachments : [],
+        ...Array.isArray(body?.message?.attachments) ? body.message.attachments : [],
+        ...Array.isArray(body?.conversation?.messages?.[0]?.attachments) ? body.conversation.messages[0].attachments : [],
+        ...body?.attachment ? [body.attachment] : []
+      ];
+      const audioAttachment = attachments.find((att) => {
+        if (!att) return false;
+        const type = String(att.file_type || att.type || "").toLowerCase();
+        const mime = String(att.content_type || att.mime_type || "").toLowerCase();
+        const ext = String(att.extension || "").toLowerCase();
+        const url = String(att.data_url || att.file_url || att.url || att.download_url || att.blob_url || "").toLowerCase();
+        return type === "audio" || type === "voice" || mime.startsWith("audio/") || mime.startsWith("video/ogg") || ["ogg", "oga", "opus", "mp3", "wav", "m4a", "aac", "weba", "webm"].includes(ext) || /\.(ogg|oga|opus|mp3|wav|m4a|aac|weba|webm)(\?.*)?$/i.test(url);
+      });
+      const rawAudioUrl = audioAttachment ? audioAttachment.data_url || audioAttachment.file_url || audioAttachment.url || audioAttachment.download_url || audioAttachment.blob_url : null;
+      if ((!messageText || !messageText.trim()) && !audioAttachment && !rawAudioUrl) {
+        console.log("[Chatwoot Webhook] Ignorando mensagem vazia ou sem texto/\xE1udio.");
         return res.status(200).send("EMPTY_MESSAGE_IGNORED");
       }
       if (messageId) {
@@ -1620,6 +1771,10 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
           addWebhookLog("error", `Falha ao processar mensagem do Chatwoot`, `Configura\xE7\xE3o da empresa ausente no servidor. Configure os dados no painel.`);
           return;
         }
+        const chatwootUrl = (storedConfig?.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim();
+        const rawToken = (storedConfig?.chatwootApiAccessToken || process.env.CHATWOOT_API_ACCESS_TOKEN || "Q1DpLpBXSGYWVP7VGunkEkwL").trim();
+        const chatwootApiAccessToken = rawToken.replace(/^Bearer\s+/i, "").replace(/^["']|["']$/g, "").trim();
+        const cleanUrl = chatwootUrl.endsWith("/") ? chatwootUrl.slice(0, -1) : chatwootUrl;
         if (storedConfig.autoRespondWhatsApp !== true) {
           addWebhookLog("system", `Mensagem do Chatwoot recebida (Rob\xF4 Desativado)`, `O rob\xF4 recebeu a mensagem de ${customerName}, mas n\xE3o respondeu porque o bot\xE3o "Responder Automaticamente" est\xE1 desativado nas configura\xE7\xF5es.`);
           console.log("[Chatwoot Webhook] Responder Automaticamente est\xE1 desativado. Ignorando processamento.");
@@ -1642,6 +1797,75 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
           }
           return;
         }
+        if (rawAudioUrl) {
+          try {
+            console.log(`[Audio Processing] Iniciando download do \xE1udio de: ${rawAudioUrl}`);
+            addWebhookLog("system", `Processando \xE1udio de ${customerName}`, `Baixando arquivo de voz para transcri\xE7\xE3o...`);
+            const fileBuffer = await downloadAudio(rawAudioUrl, cleanUrl, chatwootApiAccessToken);
+            let cleanMime = (audioAttachment?.content_type || audioAttachment?.mime_type || "audio/ogg").split(";")[0].trim().toLowerCase();
+            if (cleanMime === "audio/opus" || cleanMime === "audio/oga" || cleanMime === "application/ogg" || cleanMime === "video/ogg") {
+              cleanMime = "audio/ogg";
+            } else if (cleanMime === "audio/x-m4a" || cleanMime === "audio/m4a") {
+              cleanMime = "audio/mp4";
+            } else if (cleanMime === "audio/mpeg") {
+              cleanMime = "audio/mp3";
+            } else if (!cleanMime.startsWith("audio/")) {
+              cleanMime = "audio/ogg";
+            }
+            console.log(`[Audio Processing] Download conclu\xEDdo (${fileBuffer.length} bytes, MIME: ${cleanMime}). Transcrevendo com Gemini...`);
+            addWebhookLog("system", `Transcrevendo \xE1udio de ${customerName}`, `Enviando arquivo ao Gemini (${fileBuffer.length} bytes, formato ${cleanMime})...`);
+            const client = getGeminiClient();
+            const response = await client.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: [
+                {
+                  inlineData: {
+                    data: fileBuffer.toString("base64"),
+                    mimeType: cleanMime
+                  }
+                },
+                "Transcreva este \xE1udio em portugu\xEAs brasileiro de forma extremamente fiel e limpa. Retorne APENAS a transcri\xE7\xE3o literal do \xE1udio, sem adicionar nenhuma introdu\xE7\xE3o, explica\xE7\xF5es, coment\xE1rios ou tags adicionais."
+              ]
+            });
+            const audioTranscription = (response.text || "").trim();
+            console.log(`[Audio Processing] Transcri\xE7\xE3o conclu\xEDda: "${audioTranscription}"`);
+            if (audioTranscription) {
+              addWebhookLog("system", `\xC1udio de ${customerName} transcrito com sucesso`, `Texto: "${audioTranscription}"`);
+              messageText = `[\xC1udio do cliente]: ${audioTranscription}`;
+            } else {
+              console.log("[Audio Processing] O \xE1udio parece estar silencioso ou sem fala compreens\xEDvel.");
+              addWebhookLog("system", `\xC1udio de ${customerName} processado`, `O \xE1udio est\xE1 silencioso ou n\xE3o foi poss\xEDvel extrair a fala.`);
+              messageText = `[\xC1udio do cliente]: (\xE1udio curto ou silencioso)`;
+            }
+          } catch (audioErr) {
+            console.error("[Audio Processing] Erro ao baixar ou transcrever \xE1udio:", audioErr.message);
+            addWebhookLog("error", `Falha ao processar \xE1udio de ${customerName}`, `Erro: ${audioErr.message}`);
+            const errorMessage = `Ol\xE1, ${customerName}! Recebi a sua mensagem de \xE1udio, mas tive uma pequena oscila\xE7\xE3o t\xE9cnica de conex\xE3o ao tentar reproduzir. \u{1F3A7} Poderia, por favor, me enviar sua d\xFAvida ou modelo por mensagem de texto? Eu j\xE1 te respondo na hora com o or\xE7amento completo!`;
+            const currentHistory = await getWhatsAppHistory(fromNumber);
+            const updatedHistory = [
+              ...currentHistory,
+              { role: "user", text: "[Mensagem de \xC1udio - Falha no processamento]", timestamp: (/* @__PURE__ */ new Date()).toISOString() },
+              { role: "model", text: errorMessage, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+            ];
+            await saveWhatsAppHistory(fromNumber, updatedHistory, customerName);
+            const fallbackAccountId = chatwootAccountId || storedConfig.chatwootAccountId || 1;
+            if (chatwootApiAccessToken && fallbackAccountId && chatwootConversationId) {
+              await fetch(`${cleanUrl}/api/v1/accounts/${fallbackAccountId}/conversations/${chatwootConversationId}/messages`, {
+                method: "POST",
+                headers: {
+                  "api-access-token": chatwootApiAccessToken,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  content: errorMessage,
+                  message_type: "outgoing",
+                  private: false
+                })
+              });
+            }
+            return;
+          }
+        }
         if (messageId && db) {
           try {
             await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), {
@@ -1655,10 +1879,6 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
           }
         }
         addWebhookLog("inbound", `Mensagem de ${customerName} recebida via Chatwoot (Conversa #${chatwootConversationId})`, messageText);
-        const chatwootUrl = (storedConfig?.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim();
-        const rawToken = (storedConfig?.chatwootApiAccessToken || process.env.CHATWOOT_API_ACCESS_TOKEN || "Q1DpLpBXSGYWVP7VGunkEkwL").trim();
-        const chatwootApiAccessToken = rawToken.replace(/^Bearer\s+/i, "").replace(/^["']|["']$/g, "").trim();
-        const cleanUrl = chatwootUrl.endsWith("/") ? chatwootUrl.slice(0, -1) : chatwootUrl;
         if (chatwootApiAccessToken && chatwootAccountId && chatwootConversationId) {
           try {
             await fetch(`${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/update_last_seen`, {
@@ -1764,12 +1984,13 @@ ${msg.parts[0].text}`;
           }
         }
         addWebhookLog("outbound", `Resposta gerada pela IA (Chatwoot)`, replyText);
-        if (chatwootApiAccessToken && chatwootAccountId && chatwootConversationId) {
+        const finalAccountId = chatwootAccountId || storedConfig.chatwootAccountId || 1;
+        if (chatwootApiAccessToken && finalAccountId && chatwootConversationId) {
           const simulatedTypingMs = Math.min(Math.max(600, replyText.length * 8), 1800);
           addWebhookLog("system", `Enviando resposta ao cliente`, `Aguardando ${simulatedTypingMs}ms para digita\xE7\xE3o natural.`);
           await new Promise((resolve) => setTimeout(resolve, simulatedTypingMs));
           try {
-            const targetUrl = `${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/messages`;
+            const targetUrl = `${cleanUrl}/api/v1/accounts/${finalAccountId}/conversations/${chatwootConversationId}/messages`;
             const maskedTokenDebug = chatwootApiAccessToken ? `${chatwootApiAccessToken.substring(0, 4)}...${chatwootApiAccessToken.substring(chatwootApiAccessToken.length - 4)} (len: ${chatwootApiAccessToken.length})` : "undefined";
             console.log(`[Chatwoot API DEBUG] Sending to ${targetUrl} using token ${maskedTokenDebug}`);
             const cwResponse = await fetch(targetUrl, {
@@ -1800,7 +2021,7 @@ ${msg.parts[0].text}`;
             console.error("[Chatwoot Connection Error]", cwErr);
           } finally {
             try {
-              await fetch(`${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/toggle_typing_status`, {
+              await fetch(`${cleanUrl}/api/v1/accounts/${finalAccountId}/conversations/${chatwootConversationId}/toggle_typing_status`, {
                 method: "POST",
                 headers: {
                   "api-access-token": chatwootApiAccessToken,
@@ -1808,7 +2029,7 @@ ${msg.parts[0].text}`;
                 },
                 body: JSON.stringify({ typing_status: "off" })
               });
-              await fetch(`${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/update_last_seen`, {
+              await fetch(`${cleanUrl}/api/v1/accounts/${finalAccountId}/conversations/${chatwootConversationId}/update_last_seen`, {
                 method: "POST",
                 headers: {
                   "api-access-token": chatwootApiAccessToken,
@@ -1908,14 +2129,14 @@ ${msg.parts[0].text}`;
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path.default.join(process.cwd(), "dist");
+    const distPath = import_path2.default.join(process.cwd(), "dist");
     app.use(import_express.default.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(import_path.default.join(distPath, "index.html"));
+      res.sendFile(import_path2.default.join(distPath, "index.html"));
     });
   }
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT} (http://localhost:${PORT})`);
+    console.log(`Server running on port ${PORT} (http://0.0.0.0:${PORT})`);
     const keepAliveUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL;
     if (keepAliveUrl) {
       console.log(`[Keep-Alive] Configurando ping autom\xE1tico a cada 4 minutos para ${keepAliveUrl}/api/health`);
