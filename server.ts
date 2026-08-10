@@ -8,6 +8,7 @@ import fs from "fs";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, updateDoc, query, orderBy, limit } from "firebase/firestore";
 import { spawn } from "child_process";
+import { normalizeAudioBase64, normalizeMimeType } from "./src/audio-transcription.js";
 
 dotenv.config();
 
@@ -872,8 +873,12 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         return res.status(400).json({ error: "Nenhum dado de áudio fornecido." });
       }
 
-      // Clean base64 string if it contains data URI prefix
-      const cleanBase64 = audioBase64.replace(/^data:audio\/[a-zA-Z0-9.-]+;base64,/, "");
+      const cleanBase64 = normalizeAudioBase64(audioBase64);
+      const cleanMimeType = normalizeMimeType(mimeType);
+
+      if (!cleanBase64) {
+        return res.status(400).json({ error: "O payload de áudio está vazio ou inválido." });
+      }
 
       const client = getGeminiClient();
       const response = await client.models.generateContent({
@@ -882,7 +887,7 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
           {
             inlineData: {
               data: cleanBase64,
-              mimeType: mimeType.split(";")[0]
+              mimeType: cleanMimeType
             }
           },
           "Transcreva este áudio em português brasileiro de forma extremamente limpa, natural e fiel. Retorne APENAS a transcrição literal do áudio falado, sem adicionar nenhuma explicação, sem aspas, sem prefixos ou comentários adicionais."

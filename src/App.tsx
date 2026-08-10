@@ -1144,7 +1144,7 @@ export default function App() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             audioBase64: base64Data,
-            mimeType
+            mimeType: mimeType || 'audio/webm'
           })
         });
 
