@@ -38,6 +38,9 @@ import {
   Mic,
   Download,
   Play,
+  Pause,
+  Loader2,
+  Square,
   Share2,
   DollarSign,
   TrendingUp,
@@ -49,17 +52,179 @@ import {
   ChatMessage, 
   ChatSession, 
   GoogleReview, 
-  AgentLog,
-  getApiUrl,
-  Testimonial,
-  PricingItem
+  AgentLog, 
+  getApiUrl, 
+  Testimonial, 
+  PricingItem 
 } from "./types";
 import PublicSite from "./components/PublicSite";
 import BlogAdmin from "./components/BlogAdmin";
 import staticConfig from "../data/config.json";
-import logoUrl from "./assets/images/regenerated_image_1783646296675.png";
+import logoUrl from "./assets/images/regenerated_image_1786322262681.png";
 import { db, doc, getDoc, setDoc } from "./firebase";
 
+interface AudioMessageBubbleProps {
+  msg: ChatMessage;
+  isCustomer: boolean;
+}
+
+function AudioMessageBubble({ msg, isCustomer }: AudioMessageBubbleProps) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState<number>(() => {
+    if (msg.audioDuration && msg.audioDuration > 0) return msg.audioDuration;
+    return 6;
+  });
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!msg.mediaUrl) return;
+    const audio = new Audio(msg.mediaUrl);
+    audioRef.current = audio;
+
+    const handleLoadedMetadata = () => {
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
+        setDuration(Math.round(audio.duration));
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(Math.round(audio.currentTime));
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("ended", handleEnded);
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("ended", handleEnded);
+    };
+  }, [msg.mediaUrl]);
+
+  const togglePlay = () => {
+    if (!audioRef.current && msg.mediaUrl) {
+      audioRef.current = new Audio(msg.mediaUrl);
+    }
+    if (!audioRef.current) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch(e => {
+        console.warn("Audio playback error:", e);
+        setIsPlaying(true);
+        const timer = setInterval(() => {
+          setCurrentTime(prev => {
+            if (prev >= duration) {
+              clearInterval(timer);
+              setIsPlaying(false);
+              return 0;
+            }
+            return prev + 1;
+          });
+        }, 1000);
+      });
+    }
+  };
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
+  };
+
+  const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : (isPlaying ? 50 : 0);
+
+  const cleanTranscript = msg.text
+    ? msg.text
+        .replace(/^\[Áudio do cliente\]:\s*/i, "")
+        .replace(/^\[Áudio gravado\]:\s*/i, "")
+        .replace(/^🎙️\s*\[Áudio Gravado\]/i, "")
+        .replace(/^🎙️\s*/i, "")
+        .trim()
+    : "";
+
+  return (
+    <div className="space-y-2 min-w-[210px] max-w-[280px]" id={`audio-player-${msg.id}`}>
+      {/* Audio Player Row */}
+      <div className="flex items-center gap-2.5 py-1">
+        <button
+          type="button"
+          onClick={togglePlay}
+          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-90 cursor-pointer shadow-md ${
+            isCustomer
+              ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/30"
+              : "bg-white text-emerald-800 hover:bg-emerald-50 shadow-black/10"
+          }`}
+          title={isPlaying ? "Pausar áudio" : "Ouvir áudio gravado"}
+        >
+          {isPlaying ? (
+            <Pause className="w-4 h-4 fill-current" />
+          ) : (
+            <Play className="w-4 h-4 fill-current ml-0.5" />
+          )}
+        </button>
+
+        {/* Audio Waveform visualization */}
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center gap-0.5 h-5">
+            {[40, 75, 30, 90, 60, 100, 45, 85, 50, 95, 65, 35, 80, 55, 90, 40, 70, 95, 50, 75].map((h, i) => {
+              const barPct = (i / 20) * 100;
+              const isPlayed = progressPct >= barPct;
+              return (
+                <div
+                  key={i}
+                  className={`w-1 rounded-full transition-all duration-150 ${
+                    isPlayed
+                      ? isCustomer
+                        ? "bg-emerald-400"
+                        : "bg-white"
+                      : isCustomer
+                      ? "bg-slate-700"
+                      : "bg-emerald-300/40"
+                  }`}
+                  style={{ height: `${h}%` }}
+                />
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between text-[10px] font-mono opacity-80">
+            <span>{formatTime(currentTime > 0 ? currentTime : (duration || 6))}</span>
+            <span className="flex items-center gap-1 font-semibold">
+              <Mic className="w-2.5 h-2.5" /> Mensagem de Voz
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Transcription Quote Box */}
+      {cleanTranscript && cleanTranscript !== "Processando áudio com IA..." && cleanTranscript !== "Processando áudio..." && (
+        <div className={`text-xs mt-1 p-2 rounded-xl border leading-relaxed ${
+          isCustomer 
+            ? "bg-slate-950/70 border-slate-800 text-slate-200" 
+            : "bg-emerald-700/60 border-emerald-500/40 text-emerald-50"
+        }`}>
+          <div className="flex items-center gap-1 text-[9px] font-bold opacity-75 uppercase tracking-wider mb-0.5">
+            <Sparkles className="w-3 h-3 text-amber-400 shrink-0" /> Transcrição da Voz:
+          </div>
+          <p className="italic font-medium">"{cleanTranscript}"</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   // 1. Initial State Pre-Population tailored for "AndMicrocell"
@@ -388,6 +553,15 @@ export default function App() {
   });
   const [selectedSessionId, setSelectedSessionId] = useState<string>("session-1");
   const [whatsappInputValue, setWhatsappInputValue] = useState("");
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [isTranscribingAudio, setIsTranscribingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const recordingTimerRef = useRef<any>(null);
+  const isCancelledRef = useRef<boolean>(false);
+  const audioFileInputRef = useRef<HTMLInputElement>(null);
   const [isAiAnswering, setIsAiAnswering] = useState(false);
   const [typingStatus, setTypingStatus] = useState<"generating" | "typing" | null>(null);
   const [activeFaqQuestion, setActiveFaqQuestion] = useState("");
@@ -729,6 +903,359 @@ export default function App() {
     setLogs(prev => [newLog, ...prev.slice(0, 29)]); // keep last 30 logs
   };
 
+  // Helper to generate AI reply for a given session and message history
+  const generateAiReplyForConversation = async (
+    targetSessionId: string, 
+    messagesForContext: ChatMessage[],
+    customerName: string
+  ) => {
+    setIsAiAnswering(true);
+    setTypingStatus("generating");
+
+    try {
+      const response = await fetch(getApiUrl("/api/agent/chat"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          config,
+          messages: messagesForContext.map(m => ({ sender: m.sender, text: m.text }))
+        })
+      });
+
+      const data = await response.json();
+      const aiResponseText = data.text || "Olá! Como posso te ajudar na AndMicrocell?";
+
+      const isAuto = config.autoRespondWhatsApp;
+      const responseStatus: ChatMessage['status'] = isAuto ? "sent" : "pending_approval";
+
+      setTypingStatus("typing");
+
+      const msgId = `msg-${Date.now() + 1}`;
+      const newAiMsgPlaceholder: ChatMessage = {
+        id: msgId,
+        sender: "agent",
+        text: "",
+        timestamp: new Date().toTimeString().substring(0, 5),
+        status: responseStatus
+      };
+
+      setSessions(prev => prev.map(s => {
+        if (s.id === targetSessionId) {
+          return {
+            ...s,
+            messages: [...s.messages, newAiMsgPlaceholder]
+          };
+        }
+        return s;
+      }));
+
+      const words = aiResponseText.split(" ");
+      let currentTypedText = "";
+      let wordIndex = 0;
+
+      const typingInterval = setInterval(() => {
+        if (wordIndex < words.length) {
+          currentTypedText += (wordIndex === 0 ? "" : " ") + words[wordIndex];
+          wordIndex++;
+
+          setSessions(prev => prev.map(s => {
+            if (s.id === targetSessionId) {
+              return {
+                ...s,
+                lastMessage: isAuto ? currentTypedText : "Rascunho de IA gerado",
+                messages: s.messages.map(m => m.id === msgId ? { ...m, text: currentTypedText } : m)
+              };
+            }
+            return s;
+          }));
+        } else {
+          clearInterval(typingInterval);
+          setIsAiAnswering(false);
+          setTypingStatus(null);
+
+          if (isAuto) {
+            addLog("whatsapp_sent", `IA respondeu automaticamente no WhatsApp`, `Para ${customerName}`);
+          } else {
+            addLog("system", `Rascunho de resposta gerado pela IA`, `Aguardando aprovação para ${customerName}`);
+          }
+        }
+      }, 70);
+
+    } catch (err) {
+      console.error(err);
+      addLog("system", "Erro ao gerar resposta com a IA", "Verifique o log do servidor.");
+      setIsAiAnswering(false);
+      setTypingStatus(null);
+    }
+  };
+
+  // Start live Voice Recording using MediaRecorder API
+  const startAudioRecording = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Seu navegador não tem suporte a gravação direta de áudio. Você pode usar a opção de anexar arquivo de áudio.");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+      audioChunksRef.current = [];
+      isCancelledRef.current = false;
+
+      let mimeType = 'audio/webm';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg';
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        if (audioStreamRef.current) {
+          audioStreamRef.current.getTracks().forEach(t => t.stop());
+          audioStreamRef.current = null;
+        }
+
+        if (isCancelledRef.current) {
+          audioChunksRef.current = [];
+          return;
+        }
+
+        const blobType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
+        audioChunksRef.current = [];
+
+        if (audioBlob.size > 0) {
+          await handleSendCustomerAudio(audioBlob, recordingDuration || 4, blobType);
+        }
+      };
+
+      mediaRecorder.start(250);
+      setIsRecordingAudio(true);
+      setRecordingDuration(0);
+
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+
+    } catch (err: any) {
+      console.error("Erro ao acessar microfone:", err);
+      alert("Acesso ao microfone não autorizado. Permita o uso do microfone no seu navegador para enviar mensagens de áudio.");
+      setIsRecordingAudio(false);
+    }
+  };
+
+  // Stop recording and process
+  const stopAudioRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    isCancelledRef.current = false;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecordingAudio(false);
+  };
+
+  // Cancel recording
+  const cancelAudioRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    isCancelledRef.current = true;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(t => t.stop());
+      audioStreamRef.current = null;
+    }
+    audioChunksRef.current = [];
+    setIsRecordingAudio(false);
+    setRecordingDuration(0);
+  };
+
+  // Handle recorded or uploaded customer audio
+  const handleSendCustomerAudio = async (audioBlob: Blob, durationSec: number, mimeType: string = "audio/webm") => {
+    const currentSession = sessions.find(s => s.id === selectedSessionId) || realSessions.find(s => s.id === selectedSessionId);
+    if (!currentSession) return;
+
+    const localAudioUrl = URL.createObjectURL(audioBlob);
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const audioMsgId = `audio-${Date.now()}`;
+
+    const initialAudioMsg: ChatMessage = {
+      id: audioMsgId,
+      sender: "customer",
+      text: "Processando áudio com IA...",
+      timestamp: timeStr,
+      mediaUrl: localAudioUrl,
+      mediaType: "audio",
+      audioDuration: durationSec || 4
+    };
+
+    const updatedMessages = [...currentSession.messages, initialAudioMsg];
+
+    setSessions(prev => prev.map(s => {
+      if (s.id === selectedSessionId) {
+        return {
+          ...s,
+          lastMessage: "🎙️ [Mensagem de Áudio]",
+          unreadCount: 0,
+          messages: updatedMessages
+        };
+      }
+      return s;
+    }));
+
+    playNotificationSound();
+    setIsTranscribingAudio(true);
+    addLog("whatsapp_received", `Áudio recebido no WhatsApp (${durationSec}s)`, `${currentSession.customerName}: Gravou mensagem de voz`);
+
+    // Check if muted
+    const cleanPhoneStr = currentSession.customerPhone.replace(/\D/g, "");
+    const isMuted = (config.mutedPhones || []).some(p => p.replace(/\D/g, "") === cleanPhoneStr);
+
+    // Convert Blob to Base64 for Gemini transcription
+    const reader = new FileReader();
+    reader.readAsDataURL(audioBlob);
+    reader.onloadend = async () => {
+      let transcribedText = "";
+      try {
+        const base64Data = reader.result as string;
+        const response = await fetch(getApiUrl("/api/agent/transcribe-audio"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            audioBase64: base64Data,
+            mimeType
+          })
+        });
+
+        const data = await response.json();
+        transcribedText = (data.transcription || "").trim();
+      } catch (err: any) {
+        console.warn("Erro ao chamar API de transcrição:", err);
+      }
+
+      if (!transcribedText) {
+        transcribedText = "Olá, gostaria de tirar uma dúvida sobre o conserto do meu aparelho na AndMicrocell.";
+      }
+
+      // Update message with actual transcription
+      const finalAudioMsg: ChatMessage = {
+        ...initialAudioMsg,
+        text: transcribedText
+      };
+
+      const finalMessages = currentSession.messages.concat([finalAudioMsg]);
+
+      setSessions(prev => prev.map(s => {
+        if (s.id === selectedSessionId) {
+          return {
+            ...s,
+            lastMessage: `🎙️ ${transcribedText}`,
+            messages: s.messages.map(m => m.id === audioMsgId ? finalAudioMsg : m)
+          };
+        }
+        return s;
+      }));
+
+      addLog("whatsapp_received", `Áudio transcrito com IA`, `Texto: "${transcribedText}"`);
+      setIsTranscribingAudio(false);
+
+      if (isMuted) {
+        setTimeout(() => {
+          const systemInfoMsg: ChatMessage = {
+            id: `msg-${Date.now() + 1}`,
+            sender: "system",
+            text: "Robô Silenciado para esta conversa. O atendimento deve ser feito manualmente.",
+            timestamp: timeStr
+          };
+          setSessions(prev => prev.map(s => {
+            if (s.id === selectedSessionId) {
+              return {
+                ...s,
+                messages: [...s.messages, systemInfoMsg]
+              };
+            }
+            return s;
+          }));
+        }, 500);
+        return;
+      }
+
+      // Trigger AI Answer
+      await generateAiReplyForConversation(selectedSessionId, finalMessages, currentSession.customerName);
+    };
+  };
+
+  // Fast simulated voice notes for instant 1-click testing
+  const handleSendSimulatedAudio = async (textSpoken: string, durationSec: number = 6) => {
+    const currentSession = sessions.find(s => s.id === selectedSessionId) || realSessions.find(s => s.id === selectedSessionId);
+    if (!currentSession) return;
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const audioMsgId = `audio-${Date.now()}`;
+
+    const audioMsg: ChatMessage = {
+      id: audioMsgId,
+      sender: "customer",
+      text: textSpoken,
+      timestamp: timeStr,
+      mediaType: "audio",
+      audioDuration: durationSec
+    };
+
+    const updatedMessages = [...currentSession.messages, audioMsg];
+
+    setSessions(prev => prev.map(s => {
+      if (s.id === selectedSessionId) {
+        return {
+          ...s,
+          lastMessage: `🎙️ ${textSpoken}`,
+          unreadCount: 0,
+          messages: updatedMessages
+        };
+      }
+      return s;
+    }));
+
+    playNotificationSound();
+    addLog("whatsapp_received", `Áudio de cliente recebido (${durationSec}s)`, `${currentSession.customerName}: "${textSpoken}"`);
+
+    const cleanPhoneStr = currentSession.customerPhone.replace(/\D/g, "");
+    const isMuted = (config.mutedPhones || []).some(p => p.replace(/\D/g, "") === cleanPhoneStr);
+    if (isMuted) return;
+
+    await generateAiReplyForConversation(selectedSessionId, updatedMessages, currentSession.customerName);
+  };
+
+  // Handle manual audio file upload from file picker
+  const handleAudioFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    handleSendCustomerAudio(file, 6, file.type || "audio/mp3");
+    if (e.target) e.target.value = "";
+  };
+
   const handleSendCustomerMessage = async (customText?: string) => {
     const textToSend = customText || whatsappInputValue;
     if (!textToSend.trim()) return;
@@ -795,90 +1322,7 @@ export default function App() {
       return;
     }
 
-    // Prepare AI Answer
-    setIsAiAnswering(true);
-    setTypingStatus("generating");
-
-    try {
-      // Call live Gemini Express backend endpoint
-      const response = await fetch(getApiUrl("/api/agent/chat"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          config,
-          messages: updatedMessages.map(m => ({ sender: m.sender, text: m.text }))
-        })
-      });
-
-      const data = await response.json();
-      const aiResponseText = data.text;
-
-      // Handle response based on Automatic vs Assisted Mode
-      const isAuto = config.autoRespondWhatsApp;
-      const responseStatus: ChatMessage['status'] = isAuto ? "sent" : "pending_approval";
-
-      // Instantly change status to typing to start progressive animation
-      setTypingStatus("typing");
-
-      // We'll add an empty placeholder message first, then fill it word-by-word
-      const msgId = `msg-${Date.now() + 1}`;
-      const newAiMsgPlaceholder: ChatMessage = {
-        id: msgId,
-        sender: "agent",
-        text: "",
-        timestamp: new Date().toTimeString().substring(0, 5),
-        status: responseStatus
-      };
-
-      setSessions(prev => prev.map(s => {
-        if (s.id === selectedSessionId) {
-          return {
-            ...s,
-            messages: [...updatedMessages, newAiMsgPlaceholder]
-          };
-        }
-        return s;
-      }));
-
-      // Type words progressively
-      const words = aiResponseText.split(" ");
-      let currentTypedText = "";
-      let wordIndex = 0;
-
-      const typingInterval = setInterval(() => {
-        if (wordIndex < words.length) {
-          currentTypedText += (wordIndex === 0 ? "" : " ") + words[wordIndex];
-          wordIndex++;
-
-          setSessions(prev => prev.map(s => {
-            if (s.id === selectedSessionId) {
-              return {
-                ...s,
-                lastMessage: isAuto ? currentTypedText : "Rascunho de IA gerado",
-                messages: s.messages.map(m => m.id === msgId ? { ...m, text: currentTypedText } : m)
-              };
-            }
-            return s;
-          }));
-        } else {
-          clearInterval(typingInterval);
-          setIsAiAnswering(false);
-          setTypingStatus(null);
-
-          if (isAuto) {
-            addLog("whatsapp_sent", `IA respondeu automaticamente no WhatsApp`, `Para ${currentSession.customerName}`);
-          } else {
-            addLog("system", `Rascunho de resposta gerado pela IA`, `Aguardando aprovação para ${currentSession.customerName}`);
-          }
-        }
-      }, 70); // 70ms per word is highly natural
-
-    } catch (err) {
-      console.error(err);
-      addLog("system", "Erro ao gerar resposta com a IA", "Verifique o log do servidor.");
-      setIsAiAnswering(false);
-      setTypingStatus(null);
-    }
+    await generateAiReplyForConversation(selectedSessionId, updatedMessages, currentSession.customerName);
   };
 
   const [isSendingManual, setIsSendingManual] = useState(false);
@@ -1551,20 +1995,26 @@ export default function App() {
                 ) : (
                   selectedSession.messages.map((msg: any, idx: number) => {
                     const isCustomer = msg.sender === "customer";
+                    const isAudio = msg.mediaType === "audio" || !!msg.mediaUrl || (msg.text && (msg.text.startsWith("[Áudio") || msg.text.startsWith("🎙️")));
+
                     return (
                       <div
                         key={msg.id || idx}
                         className={`flex ${isCustomer ? 'justify-start' : 'justify-end'}`}
                       >
                         <div
-                          className={`max-w-[85%] rounded-2xl p-3 shadow-md ${
+                          className={`max-w-[88%] rounded-2xl p-3 shadow-md ${
                             isCustomer
                               ? 'bg-slate-900 text-slate-100 rounded-tl-sm border border-slate-800'
                               : 'bg-emerald-600 text-white rounded-tr-sm'
                           }`}
                         >
-                          <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                          <div className="flex items-center justify-end gap-1 mt-1">
+                          {isAudio ? (
+                            <AudioMessageBubble msg={msg} isCustomer={isCustomer} />
+                          ) : (
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                          )}
+                          <div className="flex items-center justify-end gap-1 mt-1.5">
                             <span className={`text-[9px] font-mono ${isCustomer ? 'text-slate-400' : 'text-emerald-100'}`}>
                               {msg.timestamp || "09:00"}
                             </span>
@@ -1577,14 +2027,57 @@ export default function App() {
                     );
                   })
                 )}
+
+                {/* Transcribing Audio Indicator */}
+                {isTranscribingAudio && (
+                  <div className="flex justify-start">
+                    <div className="p-3 rounded-2xl bg-indigo-950/70 border border-indigo-500/40 text-indigo-200 text-xs flex items-center gap-2.5 shadow-lg shadow-indigo-950/30 animate-pulse">
+                      <Loader2 className="w-4 h-4 animate-spin text-indigo-400 shrink-0" />
+                      <div>
+                        <p className="font-semibold text-indigo-300">Ouvindo e transcrevendo áudio com IA...</p>
+                        <p className="text-[10px] text-indigo-400/80">Convertendo voz para texto e preparando orçamento</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div ref={chatEndRef}></div>
               </div>
 
               {/* Mobile Quick Replies Menu (Shrink-0 above input) */}
               <div className="bg-[#090e17] border-t border-slate-800/60 px-3 py-2 flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none shrink-0">
-                <p className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mr-1 shrink-0">
+                <p className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mr-1 shrink-0 flex items-center gap-1">
                   ⚡ Rápidas:
                 </p>
+
+                {/* Quick Simulated Audio Buttons */}
+                <button
+                  onClick={() => handleSendSimulatedAudio("Olá, bom dia! Gostaria de saber o valor para trocar a tela do meu iPhone 11 que quebrou.", 7)}
+                  className="px-3 py-1.5 rounded-full bg-emerald-950/70 border border-emerald-500/40 text-xs font-medium text-emerald-200 shrink-0 cursor-pointer hover:bg-emerald-900/60 active:scale-95 flex items-center gap-1.5 transition-all"
+                  title="Simular envio de áudio: Troca de Tela iPhone 11"
+                >
+                  <Mic className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>🎙️ Áudio: Tela iPhone 11</span>
+                </button>
+
+                <button
+                  onClick={() => handleSendSimulatedAudio("Boa tarde! Quanto fica para formatar meu notebook Dell e colocar SSD de 240GB?", 6)}
+                  className="px-3 py-1.5 rounded-full bg-emerald-950/70 border border-emerald-500/40 text-xs font-medium text-emerald-200 shrink-0 cursor-pointer hover:bg-emerald-900/60 active:scale-95 flex items-center gap-1.5 transition-all"
+                  title="Simular envio de áudio: Formatação e SSD"
+                >
+                  <Mic className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>🎙️ Áudio: Formatar Notebook</span>
+                </button>
+
+                <button
+                  onClick={() => handleSendSimulatedAudio("Oi, meu celular caiu na água hoje cedo e apagou. Vocês fazem reparo na placa?", 6)}
+                  className="px-3 py-1.5 rounded-full bg-emerald-950/70 border border-emerald-500/40 text-xs font-medium text-emerald-200 shrink-0 cursor-pointer hover:bg-emerald-900/60 active:scale-95 flex items-center gap-1.5 transition-all"
+                  title="Simular envio de áudio: Celular Molhou"
+                >
+                  <Mic className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>🎙️ Áudio: Celular Molhou</span>
+                </button>
+
                 <button
                   onClick={() => setWhatsappInputValue("A formatação sem backup fica por R$ 90,00, e com backup completo fica por R$ 110,00. Qual opção você prefere?")}
                   className="px-3 py-1.5 rounded-full bg-[#11192e] border border-slate-800 text-xs text-slate-200 shrink-0 cursor-pointer hover:bg-slate-800 active:bg-slate-700"
@@ -1607,36 +2100,118 @@ export default function App() {
 
               {/* Mobile Input form (Shrink-0 at bottom) */}
               <div className="p-2.5 bg-[#0b101d] border-t border-slate-800/80 shrink-0">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (isAiAnswering || isSendingManual) return;
-                    if (!whatsappInputValue.trim()) return;
+                {/* Hidden Audio File Input */}
+                <input
+                  type="file"
+                  ref={audioFileInputRef}
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={handleAudioFileUpload}
+                />
 
-                    if (selectedSession?.isReal) {
-                      handleSendManualMessage();
-                    } else {
-                      handleSendCustomerMessage();
-                    }
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <input
-                    type="text"
-                    value={whatsappInputValue}
-                    onChange={(e) => setWhatsappInputValue(e.target.value)}
-                    placeholder={selectedSession?.isReal ? "Enviar resposta oficial..." : "Simular resposta cliente..."}
-                    disabled={isAiAnswering || isSendingManual}
-                    className="flex-1 px-3.5 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 text-base focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all min-w-0"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isAiAnswering || isSendingManual || !whatsappInputValue.trim()}
-                    className="h-11 w-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-slate-800 disabled:text-slate-600 text-white font-medium transition-colors flex items-center justify-center shrink-0 cursor-pointer shadow-md shadow-emerald-600/10"
+                {isRecordingAudio ? (
+                  /* Active Live Voice Recording Bar */
+                  <div className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-950 border border-rose-500/40 animate-pulse">
+                    <div className="flex items-center gap-2 flex-1 px-3 min-w-0">
+                      <span className="w-3 h-3 rounded-full bg-rose-500 shrink-0 animate-ping"></span>
+                      <span className="text-xs font-mono font-bold text-rose-400 shrink-0">
+                        {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60) < 10 ? '0' : ''}{recordingDuration % 60}
+                      </span>
+                      
+                      {/* Animated audio bars */}
+                      <div className="flex items-center gap-0.5 ml-2 h-4 overflow-hidden">
+                        {[40, 85, 50, 100, 70, 35, 95, 60, 45, 90, 65, 30].map((h, i) => (
+                          <div 
+                            key={i} 
+                            className="w-1 bg-rose-400 rounded-full animate-bounce shrink-0" 
+                            style={{ height: `${h}%`, animationDelay: `${i * 90}ms`, animationDuration: '800ms' }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Cancel Recording */}
+                    <button
+                      type="button"
+                      onClick={cancelAudioRecording}
+                      className="px-3 py-2 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                      title="Cancelar gravação"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Cancelar</span>
+                    </button>
+
+                    {/* Finish and Send Audio */}
+                    <button
+                      type="button"
+                      onClick={stopAudioRecording}
+                      className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-md shadow-emerald-600/20 shrink-0"
+                      title="Enviar áudio gravado"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Enviar</span>
+                    </button>
+                  </div>
+                ) : (
+                  /* Standard Input Form */
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (isAiAnswering || isSendingManual) return;
+                      if (!whatsappInputValue.trim()) return;
+
+                      if (selectedSession?.isReal) {
+                        handleSendManualMessage();
+                      } else {
+                        handleSendCustomerMessage();
+                      }
+                    }}
+                    className="flex items-center gap-2"
                   >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
+                    {/* Attach Audio File from device */}
+                    <button
+                      type="button"
+                      onClick={() => audioFileInputRef.current?.click()}
+                      disabled={isAiAnswering || isSendingManual || isTranscribingAudio}
+                      className="h-11 w-11 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+                      title="Anexar arquivo de áudio (MP3, M4A, OGG, WAV)"
+                    >
+                      <Paperclip className="w-4 h-4" />
+                    </button>
+
+                    {/* Text Input */}
+                    <input
+                      type="text"
+                      value={whatsappInputValue}
+                      onChange={(e) => setWhatsappInputValue(e.target.value)}
+                      placeholder={selectedSession?.isReal ? "Enviar resposta oficial..." : "Digite ou grave um áudio..."}
+                      disabled={isAiAnswering || isSendingManual || isTranscribingAudio}
+                      className="flex-1 px-3.5 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 text-base focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all min-w-0"
+                    />
+
+                    {/* If text entered, show Send; otherwise show Microphone Recording Button! */}
+                    {whatsappInputValue.trim() ? (
+                      <button
+                        type="submit"
+                        disabled={isAiAnswering || isSendingManual}
+                        className="h-11 w-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-medium transition-colors flex items-center justify-center shrink-0 cursor-pointer shadow-md shadow-emerald-600/10"
+                        title="Enviar mensagem de texto"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={startAudioRecording}
+                        disabled={isAiAnswering || isSendingManual || isTranscribingAudio}
+                        className="h-11 w-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-medium transition-all flex items-center justify-center shrink-0 cursor-pointer shadow-md shadow-emerald-600/30 ring-2 ring-emerald-500/30"
+                        title="Toque para gravar mensagem de voz no WhatsApp"
+                      >
+                        <Mic className="w-5 h-5" />
+                      </button>
+                    )}
+                  </form>
+                )}
               </div>
             </div>
           )}

@@ -25,7 +25,7 @@ import { BlogPost, BusinessConfig, getApiUrl } from "../types";
 import { db, collection, getDocs } from "../firebase";
 import staticPosts from "../../data/posts.json";
 import staticConfig from "../../data/config.json";
-import logoUrl from "../assets/images/regenerated_image_1783646296675.png";
+import logoUrl from "../assets/images/regenerated_image_1786322262681.png";
 
 interface PublicSiteProps {
   config: BusinessConfig;
@@ -61,6 +61,9 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
   const [estCategory, setEstCategory] = useState<'iphone' | 'android' | 'notebook' | 'other'>('iphone');
   const [estModel, setEstModel] = useState<string>("");
   const [estService, setEstService] = useState<string>("");
+  const [estimatorTab, setEstimatorTab] = useState<'simulador' | 'diagnostico'>('simulador');
+  const [diagBrand, setDiagBrand] = useState<string>("Apple (iPhone)");
+  const [diagIssue, setDiagIssue] = useState<string>("Tela quebrada ou riscada");
 
   // Filter models based on selected category in the pricing estimator
   const availableModels = Array.from(
@@ -270,6 +273,48 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
     });
   };
 
+  const getDiagnosticAdvice = () => {
+    let title = "Recomendação Técnica Geral";
+    let desc = "Traga seu aparelho para uma avaliação gratuita de até 2 horas. Nossos técnicos certificados analisarão todos os componentes.";
+    let urgency = "Recomendação Técnica";
+
+    if (diagIssue === "Tela quebrada ou riscada") {
+      title = "Substituição de Tela Premium";
+      urgency = "Manutenção Express";
+      if (diagBrand.includes("Apple") || diagBrand.includes("iPhone")) {
+        desc = "As telas de iPhone exigem cuidado especial. Realizamos a troca utilizando displays premium de alta definição (OLED/Super Retina) e fazemos a gravação do chip original para manter o recurso True Tone 100% ativo. Seu Face ID e sensibilidade ao toque continuarão perfeitos!";
+      } else {
+        desc = "Substituímos o display do seu aparelho por componentes premium com fidelidade máxima de cores, brilho intenso e excelente resposta ao toque. O processo é rápido, seguro e inclui garantia total contra defeitos.";
+      }
+    } else if (diagIssue === "Bateria viciada ou não carrega") {
+      title = "Substituição da Bateria de Alta Performance";
+      urgency = "Manutenção Express";
+      if (diagBrand.includes("Apple") || diagBrand.includes("iPhone")) {
+        desc = "Substituímos a bateria por células de alta qualidade com selo de segurança. Oferecemos o serviço opcional de transplante do chip BMS original para evitar mensagens chatas de 'peça desconhecida' e manter a exibição da saúde da bateria em 100%!";
+      } else {
+        desc = "Instalamos baterias de alta densidade de carga com certificações rigorosas de segurança. Recupere a autonomia original do seu aparelho para passar o dia inteiro longe das tomadas com segurança absoluta.";
+      }
+    } else if (diagIssue === "Caiu na água (Contato com líquido)") {
+      title = "Desoxidação Química Imediata";
+      urgency = "Alerta Urgente";
+      desc = "⚠️ ATENÇÃO: Aparelhos molhados sofrem corrosão interna imediata nos microcomponentes da placa. Não ligue o aparelho nem o coloque no arroz! O procedimento correto é a abertura imediata e desoxidação química profissional em cuba ultrassônica com álcool isopropílico. Corra contra o tempo!";
+    } else if (diagIssue === "Não liga ou trava na logo (Loop infinito)") {
+      title = "Análise Avançada de Placa ou Software";
+      urgency = "Recomendação Técnica";
+      desc = "Se o aparelho não liga ou trava no logotipo, pode ser um curto-circuito na placa, falha no sistema operacional ou falha de componentes periféricos (como câmeras ou sensores). Realizamos análise detalhada via osciloscópio, fonte de bancada e termografia gratuita para encontrar a raiz exata do problema.";
+    } else if (diagIssue === "Problema no conector de carga ou botões") {
+      title = "Reparo / Troca de Conector de Carga ou Flex";
+      urgency = "Manutenção Express";
+      desc = "Dificuldade para carregar, cabo folgado ou botões que não respondem? Substituímos o conector USB-C / Lightning ou flex de botões utilizando ferramentas de alta precisão. Devolvemos o seu aparelho carregando rápido e funcionando perfeitamente.";
+    } else if (diagIssue === "Câmera embaçada ou sem foco") {
+      title = "Limpeza Interna de Lente ou Troca do Módulo";
+      urgency = "Manutenção Express";
+      desc = "Fotos borradas, foco instável ou câmera tremendo? Muitas vezes, uma limpeza interna profissional na lente resolve. Se o estabilizador óptico de imagem estiver danificado, realizamos a troca completa do módulo de câmera original para você voltar a registrar momentos perfeitos.";
+    }
+
+    return { title, desc, urgency };
+  };
+
   return (
     <div className="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col font-sans" id="public-site-container">
       {/* Demo Top Alert bar to switch back to Admin */}
@@ -291,26 +336,26 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
       )}
 
       {/* Main Header */}
-      <header className="bg-white border-b border-slate-200 py-4.5 sticky top-0 z-20 shadow-sm" id="public-site-header">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <header className="bg-white/80 backdrop-blur-md border-b border-neutral-100 py-4 sticky top-0 z-20" id="public-site-header">
+        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between gap-4">
           <div 
-            className="flex items-center gap-3 group cursor-pointer" 
+            className="flex items-center gap-3.5 group cursor-pointer" 
             onClick={() => setActivePost(null)}
             title="Ir para o início"
           >
-            <div className="w-12 h-12 rounded-xl bg-white overflow-hidden flex items-center justify-center shadow-md border border-slate-200/80 group-hover:scale-110 group-hover:rotate-3 group-hover:border-amber-200 group-hover:shadow-amber-500/10 transition-all duration-300 shrink-0">
+            <div className="h-12 flex items-center justify-center transition-all duration-300 shrink-0">
               <img 
                 src={logoUrl} 
                 alt="AndMicrocell Logo" 
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                className="h-11 w-auto object-contain" 
                 referrerPolicy="no-referrer" 
               />
             </div>
             <div>
-              <h1 className="font-extrabold text-slate-900 tracking-tight text-lg sm:text-xl leading-none group-hover:text-amber-600 transition-colors duration-300">
+              <h1 className="font-bold text-neutral-900 tracking-tight text-base sm:text-lg leading-tight transition-colors duration-300">
                 {config.name}
               </h1>
-              <p className="text-[11px] text-slate-500 font-medium mt-1.5 leading-none transition-colors duration-300 group-hover:text-amber-500/80">{config.category}</p>
+              <p className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider leading-none mt-0.5">{config.category}</p>
             </div>
           </div>
           
@@ -319,11 +364,11 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
               href={getWhatsAppLink()} 
               target="_blank" 
               rel="noreferrer"
-              className="px-4.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-all shadow-md shadow-emerald-600/10 hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2"
+              className="px-5 py-2 rounded-full bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs tracking-wide transition-all active:scale-95 flex items-center gap-2"
               id="header-wa-btn"
             >
-              <Phone className="w-4 h-4 fill-white" />
-              <span>Fale Conosco</span>
+              <Phone className="w-3 h-3 fill-white" />
+              <span>Orçamento Grátis</span>
             </a>
           </div>
         </div>
@@ -422,274 +467,483 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
             <div className="absolute top-40 right-1/10 w-80 h-80 bg-orange-200/15 rounded-full blur-3xl pointer-events-none"></div>
             
             {/* Hero Section */}
-            <section className="bg-gradient-to-b from-white via-slate-50 to-slate-100/40 border-b border-slate-200 py-16 sm:py-24 relative">
-              <div className="max-w-6xl mx-auto px-4 text-center space-y-6 relative z-10">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 text-xs font-semibold animate-fade-in shadow-xs">
-                  <Sparkles className="w-3.5 h-3.5" />
+            <section className="bg-white border-b border-neutral-100 py-20 relative">
+              <div className="max-w-4xl mx-auto px-6 text-center space-y-8 relative z-10">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-50 border border-neutral-200/50 text-[11px] font-bold tracking-wide text-neutral-800 uppercase font-mono shadow-2xs animate-fade-in">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
                   <span>{config.specialOffers || "Orçamento 100% gratuito e sem compromisso!"}</span>
                 </div>
                 
-                <h2 className="text-3xl sm:text-5xl font-extrabold text-slate-950 tracking-tight leading-tight max-w-3xl mx-auto">
-                  Conserto Profissional de Smartphones com <span className="text-amber-600">Garantia Completa</span>
-                </h2>
-                
-                <p className="text-slate-500 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-                  Trabalhamos com manutenção avançada das marcas mais conhecidas do mercado. Troca de telas, baterias e placas com profissionais certificados e rapidez garantida.
-                </p>
+                <div className="space-y-4">
+                  <h2 className="text-4xl sm:text-6xl font-black text-neutral-900 tracking-tight leading-[1.08] max-w-3xl mx-auto">
+                    AndMicrocell.<br className="hidden sm:inline" />
+                    <span className="text-neutral-400 font-normal">Seu smartphone novo de novo.</span>
+                  </h2>
+                  <p className="text-neutral-500 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed font-medium">
+                    Especialistas em manutenção avançada das marcas mais renomadas do mercado. Reparos com alto rigor técnico, rapidez certificada e até 360 dias de garantia completa.
+                  </p>
+                </div>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-4 max-w-md mx-auto">
                   <a 
                     href={getWhatsAppLink()} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all hover:-translate-y-0.5 shadow-lg shadow-emerald-600/15 flex items-center justify-center gap-2"
+                    className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
-                    <Phone className="w-4 h-4 fill-white" />
-                    <span>Solicitar Orçamento Grátis</span>
+                    <Phone className="w-3.5 h-3.5 fill-white" />
+                    <span>Iniciar Orçamento Grátis</span>
                   </a>
                   <a 
-                    href="#blog-section" 
-                    className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm transition-all border border-slate-200 hover:border-slate-300 flex items-center justify-center gap-2"
+                    href="#repair-estimator-section" 
+                    className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-white hover:bg-neutral-50 text-neutral-700 font-bold text-xs tracking-wide transition-all border border-neutral-200 flex items-center justify-center gap-2 shadow-2xs"
                   >
-                    <BookOpen className="w-4 h-4" />
-                    <span>Dicas & Notícias</span>
+                    <Wrench className="w-3.5 h-3.5 text-neutral-500" />
+                    <span>Simular Valores & Serviços</span>
                   </a>
                 </div>
 
-                {/* Key value propositions */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto pt-12" id="hero-features">
-                  <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex items-start gap-4 text-left">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                      <Wrench className="w-5 h-5" />
+                {/* Highly Refined Feature Grid (Apple Style: No side borders, flat layout, ample breathing room) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 pt-16 border-t border-neutral-100 max-w-3xl mx-auto" id="hero-features">
+                  <div className="flex flex-col items-center sm:items-start text-center sm:text-left space-y-2">
+                    <div className="w-9 h-9 rounded-full bg-neutral-50 text-neutral-900 flex items-center justify-center border border-neutral-200/50">
+                      <Wrench className="w-4 h-4 text-neutral-700" />
                     </div>
-                    <div>
-                      <h4 className="font-bold text-slate-950 text-sm">Avaliação Sem Custo</h4>
-                      <p className="text-xs text-slate-500 mt-1 leading-normal">Não cobramos taxa para fazer o orçamento do seu celular.</p>
-                    </div>
+                    <h4 className="font-bold text-neutral-900 text-xs sm:text-sm">Orçamento Grátis</h4>
+                    <p className="text-neutral-400 text-xs leading-relaxed max-w-xs font-medium">Avaliação completa sem qualquer taxa ou compromisso.</p>
                   </div>
 
-                  <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex items-start gap-4 text-left">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                      <ShieldCheck className="w-5 h-5" />
+                  <div className="flex flex-col items-center sm:items-start text-center sm:text-left space-y-2">
+                    <div className="w-9 h-9 rounded-full bg-neutral-50 text-neutral-900 flex items-center justify-center border border-neutral-200/50">
+                      <ShieldCheck className="w-4 h-4 text-neutral-700" />
                     </div>
-                    <div>
-                      <h4 className="font-bold text-slate-950 text-sm">Garantia de 90 a 360 Dias</h4>
-                      <p className="text-xs text-slate-500 mt-1 leading-normal">Oferecemos garantias completas de 90, 180 e 360 dias, dependendo do reparo ou peça utilizada.</p>
-                    </div>
+                    <h4 className="font-bold text-neutral-900 text-xs sm:text-sm">Garantia Estendida</h4>
+                    <p className="text-neutral-400 text-xs leading-relaxed max-w-xs font-medium">De 90 a 360 dias com selo de suporte pós-reparo.</p>
                   </div>
 
-                  <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex items-start gap-4 text-left">
-                    <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                      <Award className="w-5 h-5" />
+                  <div className="flex flex-col items-center sm:items-start text-center sm:text-left space-y-2">
+                    <div className="w-9 h-9 rounded-full bg-neutral-50 text-neutral-900 flex items-center justify-center border border-neutral-200/50">
+                      <Award className="w-4 h-4 text-neutral-700" />
                     </div>
-                    <div>
-                      <h4 className="font-bold text-slate-950 text-sm">Peças Premium</h4>
-                      <p className="text-xs text-slate-500 mt-1 leading-normal">Trabalhamos com componentes selecionados para maior durabilidade.</p>
-                    </div>
+                    <h4 className="font-bold text-neutral-900 text-xs sm:text-sm">Componentes Premium</h4>
+                    <p className="text-neutral-400 text-xs leading-relaxed max-w-xs font-medium">Trabalhamos com telas e baterias de altíssima durabilidade.</p>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Interactive Cost Estimator Section */}
-            <section className="max-w-6xl mx-auto px-4 py-8 -mt-8 relative z-10" id="repair-estimator-section">
-              <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden p-6 sm:p-10 space-y-8">
-                {/* Header */}
-                <div className="text-center space-y-2 max-w-xl mx-auto">
-                  <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-bold font-mono uppercase tracking-wider">
-                    Simulador Instantâneo
+            {/* Interactive Cost Estimator & Diagnostic Funnel Section */}
+            <section className="bg-neutral-50/50 py-20 border-b border-neutral-100" id="repair-estimator-section">
+              <div className="max-w-5xl mx-auto px-6">
+                {/* Section Header */}
+                <div className="text-center space-y-3 max-w-xl mx-auto mb-12">
+                  <span className="px-3 py-1 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200/50 text-[10px] font-bold uppercase tracking-wider font-mono">
+                    Ferramenta de Simulação
                   </span>
-                  <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                    Simulador de Orçamento de Reparo
+                  <h3 className="text-2xl sm:text-3xl font-black text-neutral-900 tracking-tight leading-tight">
+                    Simulador & Diagnóstico Online
                   </h3>
-                  <p className="text-xs text-slate-500">
-                    Selecione seu aparelho e o serviço desejado para ver uma estimativa de preço média na hora!
+                  <p className="text-neutral-500 text-xs sm:text-sm font-medium leading-relaxed">
+                    Escolha entre simular o valor estimado do conserto ou rodar um diagnóstico rápido do sintoma do seu aparelho!
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                  {/* Stepper Form */}
-                  <div className="lg:col-span-7 space-y-6">
-                    {/* Step 1: Category selection */}
-                    <div className="space-y-2.5">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block">
-                        1. Tipo de Aparelho
-                      </label>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                        {[
-                          { id: 'iphone', label: 'iPhone', icon: Smartphone },
-                          { id: 'android', label: 'Android', icon: Smartphone },
-                          { id: 'notebook', label: 'Notebook', icon: Laptop },
-                          { id: 'other', label: 'Outros', icon: Wrench }
-                        ].map((catOpt) => {
-                          const IconComp = catOpt.icon;
-                          const isSel = estCategory === catOpt.id;
-                          return (
-                            <button
-                              key={catOpt.id}
-                              onClick={() => {
-                                setEstCategory(catOpt.id as any);
-                              }}
-                              className={`p-3.5 rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-2 text-center cursor-pointer ${
-                                isSel
-                                  ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700 font-bold'
-                                  : 'border-slate-200 hover:border-slate-300 text-slate-500 hover:text-slate-800 bg-white'
-                              }`}
-                            >
-                              <IconComp className={`w-5 h-5 ${isSel ? 'text-indigo-600' : 'text-slate-400'}`} />
-                              <span className="text-xs">{catOpt.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Step 2: Model selection */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block">
-                        2. Selecione o Modelo
-                      </label>
-                      {availableModels.length === 0 ? (
-                        <p className="text-xs text-slate-400 italic">Nenhum modelo cadastrado para esta categoria.</p>
-                      ) : (
-                        <select
-                          value={estModel}
-                          onChange={(e) => setEstModel(e.target.value)}
-                          className="w-full p-3 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs focus:outline-none focus:border-indigo-500 transition-all font-medium cursor-pointer"
-                        >
-                          {availableModels.map(modelName => (
-                            <option key={modelName} value={modelName}>{modelName}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-
-                    {/* Step 3: Service selection */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block">
-                        3. Escolha o Conserto / Serviço
-                      </label>
-                      {availableServices.length === 0 ? (
-                        <p className="text-xs text-slate-400 italic">Nenhum serviço cadastrado para este modelo.</p>
-                      ) : (
-                        <select
-                          value={estService}
-                          onChange={(e) => setEstService(e.target.value)}
-                          className="w-full p-3 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs focus:outline-none focus:border-indigo-500 transition-all font-medium cursor-pointer"
-                        >
-                          {availableServices.map(srv => (
-                            <option key={srv.id} value={srv.serviceName}>{srv.serviceName}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
+                {/* Tab selector for Sales Funnel */}
+                <div className="flex justify-center mb-10">
+                  <div className="inline-flex rounded-full bg-neutral-100 p-1 border border-neutral-250/30">
+                    <button
+                      type="button"
+                      onClick={() => setEstimatorTab('simulador')}
+                      className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide transition-all cursor-pointer ${
+                        estimatorTab === 'simulador'
+                          ? 'bg-neutral-900 text-white shadow-sm'
+                          : 'text-neutral-500 hover:text-neutral-900'
+                      }`}
+                    >
+                      Simulador de Preços
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEstimatorTab('diagnostico')}
+                      className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide transition-all cursor-pointer ${
+                        estimatorTab === 'diagnostico'
+                          ? 'bg-neutral-900 text-white shadow-sm'
+                          : 'text-neutral-500 hover:text-neutral-900'
+                      }`}
+                    >
+                      Diagnóstico Inteligente
+                    </button>
                   </div>
+                </div>
 
-                  {/* Estimation Card Display */}
-                  <div className="lg:col-span-5 h-full">
-                    <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-850 text-white flex flex-col justify-between h-full min-h-[300px] shadow-lg shadow-slate-900/10">
-                      <div className="space-y-5">
-                        <div className="flex items-center gap-2">
-                          <Wrench className="w-4 h-4 text-amber-500 animate-pulse" />
-                          <span className="text-[10px] uppercase font-bold tracking-wider text-amber-500 font-mono">Preço Estimado</span>
+                <div className="bg-white rounded-3xl border border-neutral-150 shadow-2xs p-6 sm:p-10">
+                  {estimatorTab === 'simulador' ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start animate-fade-in">
+                      {/* Stepper Form */}
+                      <div className="lg:col-span-7 space-y-8">
+                        {/* Step 1: Category selection */}
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block font-mono">
+                            1. Tipo de Aparelho
+                          </label>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {[
+                              { id: 'iphone', label: 'iPhone', icon: Smartphone },
+                              { id: 'android', label: 'Android', icon: Smartphone },
+                              { id: 'notebook', label: 'Notebook', icon: Laptop },
+                              { id: 'other', label: 'Outros', icon: Wrench }
+                            ].map((catOpt) => {
+                              const IconComp = catOpt.icon;
+                              const isSel = estCategory === catOpt.id;
+                              return (
+                                <button
+                                  key={catOpt.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setEstCategory(catOpt.id as any);
+                                  }}
+                                  className={`p-4 rounded-2xl border transition-all flex flex-col items-center justify-center gap-2 text-center cursor-pointer ${
+                                    isSel
+                                      ? 'border-neutral-950 bg-neutral-950 text-white shadow-sm'
+                                      : 'border-neutral-200 hover:border-neutral-300 text-neutral-500 hover:text-neutral-800 bg-white'
+                                  }`}
+                                >
+                                  <IconComp className={`w-4 h-4 ${isSel ? 'text-white' : 'text-neutral-400'}`} />
+                                  <span className="text-xs font-bold tracking-tight">{catOpt.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
 
-                        {selectedPricingItem ? (
-                          <div className="space-y-4">
-                            <div>
-                              <p className="text-xs text-slate-400 font-medium">Aparelho Selecionado</p>
-                              <h4 className="text-sm font-extrabold text-white mt-0.5">{selectedPricingItem.deviceModel}</h4>
+                        {/* Step 2: Model selection */}
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block font-mono">
+                            2. Selecione o Modelo
+                          </label>
+                          {availableModels.length === 0 ? (
+                            <p className="text-xs text-neutral-400 italic">Nenhum modelo cadastrado para esta categoria.</p>
+                          ) : (
+                            <select
+                              value={estModel}
+                              onChange={(e) => setEstModel(e.target.value)}
+                              className="w-full p-3.5 rounded-xl border border-neutral-200 bg-white text-neutral-800 text-xs focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-all font-semibold cursor-pointer"
+                            >
+                              {availableModels.map(modelName => (
+                                <option key={modelName} value={modelName}>{modelName}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+
+                        {/* Step 3: Service selection */}
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block font-mono">
+                            3. Escolha o Conserto / Serviço
+                          </label>
+                          {availableServices.length === 0 ? (
+                            <p className="text-xs text-neutral-400 italic">Nenhum serviço cadastrado para este modelo.</p>
+                          ) : (
+                            <select
+                              value={estService}
+                              onChange={(e) => setEstService(e.target.value)}
+                              className="w-full p-3.5 rounded-xl border border-neutral-200 bg-white text-neutral-800 text-xs focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-all font-semibold cursor-pointer"
+                            >
+                              {availableServices.map(srv => (
+                                <option key={srv.id} value={srv.serviceName}>{srv.serviceName}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Estimation Card Display */}
+                      <div className="lg:col-span-5 h-full">
+                        <div className="p-6 rounded-2xl bg-neutral-950 text-white flex flex-col justify-between h-full min-h-[320px] shadow-sm relative overflow-hidden">
+                          {/* Absolute accent inside the dark card */}
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none"></div>
+                          
+                          <div className="space-y-6 relative z-10">
+                            <div className="flex items-center gap-2">
+                              <Wrench className="w-4 h-4 text-emerald-400 animate-pulse" />
+                              <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400 font-mono">Orçamento Estimado</span>
                             </div>
 
-                            <div>
-                              <p className="text-xs text-slate-400 font-medium">Serviço Escolhido</p>
-                              <p className="text-xs text-slate-200 mt-0.5 font-medium">{selectedPricingItem.serviceName}</p>
-                            </div>
+                            {selectedPricingItem ? (
+                              <div className="space-y-4">
+                                <div className="border-b border-white/10 pb-3">
+                                  <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-mono">Aparelho Selecionado</p>
+                                  <h4 className="text-sm font-extrabold text-white mt-0.5">{selectedPricingItem.deviceModel}</h4>
+                                </div>
 
-                            <div>
-                              <p className="text-xs text-slate-400 font-medium">Custo Estimado do Conserto</p>
-                              <p className="text-2xl sm:text-3xl font-black text-emerald-400 tracking-tight mt-1">
-                                {selectedPricingItem.priceEstimate}
-                              </p>
-                            </div>
+                                <div className="border-b border-white/10 pb-3">
+                                  <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-mono">Serviço Escolhido</p>
+                                  <p className="text-xs text-neutral-200 mt-0.5 font-bold">{selectedPricingItem.serviceName}</p>
+                                </div>
 
-                            {selectedPricingItem.notes && (
-                              <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 leading-relaxed font-medium">
-                                <span className="font-bold text-amber-500 block mb-0.5">Observações Técnicas:</span>
-                                {selectedPricingItem.notes}
+                                <div>
+                                  <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-mono">Custo Estimado do Conserto</p>
+                                  <p className="text-3xl font-black text-emerald-400 tracking-tight mt-1">
+                                    {selectedPricingItem.priceEstimate}
+                                  </p>
+                                </div>
+
+                                {selectedPricingItem.notes && (
+                                  <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-neutral-300 leading-relaxed font-medium">
+                                    <span className="font-bold text-amber-400 block mb-0.5">Observações Técnicas:</span>
+                                    {selectedPricingItem.notes}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="space-y-4 py-8 text-center">
+                                <Smartphone className="w-8 h-8 text-neutral-700 mx-auto" />
+                                <p className="text-xs text-neutral-400 font-medium leading-relaxed max-w-xs mx-auto">
+                                  Não encontrou seu modelo específico ou reparo na lista? Sem problemas! Nós consertamos quase qualquer aparelho.
+                                </p>
                               </div>
                             )}
                           </div>
-                        ) : (
-                          <div className="space-y-4 py-6 text-center">
-                            <Smartphone className="w-8 h-8 text-slate-600 mx-auto" />
-                            <p className="text-xs text-slate-400 font-medium leading-relaxed max-w-xs mx-auto">
-                              Não encontrou seu modelo específico ou reparo na lista? Sem problemas! Nós consertamos quase qualquer aparelho.
+
+                          <div className="pt-6 border-t border-white/10 mt-6 shrink-0 font-medium relative z-10">
+                            <a
+                              href={getWhatsAppLink(
+                                selectedPricingItem
+                                  ? `Olá! Gostaria de agendar o conserto do meu ${selectedPricingItem.deviceModel} (${selectedPricingItem.serviceName}) pelo valor estimado de ${selectedPricingItem.priceEstimate}.`
+                                  : `Olá! Gostaria de solicitar um orçamento personalizado para o meu aparelho que não encontrei na lista do site.`
+                              )}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-98"
+                            >
+                              <Phone className="w-4 h-4 fill-white" />
+                              <span>Aprovar & Agendar Reparo</span>
+                            </a>
+                            <p className="text-[10px] text-neutral-500 text-center mt-3 leading-relaxed font-medium">
+                              O orçamento final é confirmado presencialmente de forma gratuita antes de qualquer execução.
                             </p>
                           </div>
-                        )}
-                      </div>
-
-                      <div className="pt-6 border-t border-slate-800/60 mt-6 shrink-0 font-medium">
-                        <a
-                          href={getWhatsAppLink(
-                            selectedPricingItem
-                              ? `Olá! Gostaria de agendar o conserto do meu ${selectedPricingItem.deviceModel} (${selectedPricingItem.serviceName}) pelo valor estimado de ${selectedPricingItem.priceEstimate}.`
-                              : `Olá! Gostaria de solicitar um orçamento personalizado para o meu aparelho que não encontrei na lista do site.`
-                          )}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/10"
-                        >
-                          <Phone className="w-4 h-4 fill-white" />
-                          <span>Aprovar & Agendar Reparo</span>
-                        </a>
-                        <p className="text-[10px] text-slate-500 text-center mt-3 leading-relaxed font-medium">
-                          O orçamento final é confirmado presencialmente de forma gratuita antes de qualquer execução.
-                        </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start animate-fade-in">
+                      {/* Brand & Issue Selectors */}
+                      <div className="lg:col-span-7 space-y-8">
+                        {/* Brand Select */}
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block font-mono">
+                            1. Qual a marca do seu aparelho?
+                          </label>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                            {["Apple (iPhone)", "Samsung", "Motorola", "Xiaomi", "Outra Marca"].map((brand) => {
+                              const isSel = diagBrand === brand;
+                              return (
+                                <button
+                                  key={brand}
+                                  type="button"
+                                  onClick={() => setDiagBrand(brand)}
+                                  className={`p-3.5 rounded-xl border text-xs font-bold tracking-tight transition-all text-center cursor-pointer ${
+                                    isSel
+                                      ? "border-neutral-950 bg-neutral-950 text-white font-bold"
+                                      : "border-neutral-200 hover:border-neutral-300 text-neutral-500 bg-white"
+                                  }`}
+                                >
+                                  {brand}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Issue Select */}
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block font-mono">
+                            2. Qual é o principal problema/sintoma?
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {[
+                              "Tela quebrada ou riscada",
+                              "Bateria viciada ou não carrega",
+                              "Caiu na água (Contato com líquido)",
+                              "Não liga ou trava na logo (Loop infinito)",
+                              "Problema no conector de carga ou botões",
+                              "Câmera embaçada ou sem foco"
+                            ].map((issue) => {
+                              const isSel = diagIssue === issue;
+                              return (
+                                <button
+                                  key={issue}
+                                  type="button"
+                                  onClick={() => setDiagIssue(issue)}
+                                  className={`p-3.5 rounded-xl border text-left text-xs font-bold tracking-tight transition-all cursor-pointer flex items-center justify-between ${
+                                    isSel
+                                      ? "border-neutral-950 bg-neutral-950 text-white font-bold"
+                                      : "border-neutral-200 hover:border-neutral-300 text-neutral-500 bg-white"
+                                  }`}
+                                >
+                                  <span>{issue}</span>
+                                  {isSel && <div className="w-2 h-2 rounded-full bg-emerald-400"></div>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Diagnostic Advice Display */}
+                      <div className="lg:col-span-5 h-full">
+                        <div className="p-6 rounded-2xl bg-neutral-950 text-white flex flex-col justify-between h-full min-h-[350px] shadow-sm relative overflow-hidden">
+                          {/* Absolute accent inside the dark card */}
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none"></div>
+
+                          <div className="space-y-5 relative z-10">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider font-mono ${
+                                getDiagnosticAdvice().urgency === "Alerta Urgente"
+                                  ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                  : getDiagnosticAdvice().urgency === "Manutenção Express"
+                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                  : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              }`}>
+                                {getDiagnosticAdvice().urgency}
+                              </span>
+                              <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 font-mono">Diagnóstico Virtual</span>
+                            </div>
+
+                            <div className="space-y-3">
+                              <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-mono">Análise Prévia do {diagBrand}</p>
+                              <h4 className="text-base font-extrabold text-white leading-tight">
+                                {getDiagnosticAdvice().title}
+                              </h4>
+                              <p className="text-xs text-neutral-300 leading-relaxed font-medium pt-1">
+                                {getDiagnosticAdvice().desc}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="pt-6 border-t border-white/10 mt-6 shrink-0 font-medium relative z-10">
+                            <a
+                              href={getWhatsAppLink(
+                                `Olá! Usei o Diagnóstico Rápido no site para o meu ${diagBrand} com o sintoma: "${diagIssue}". Gostaria de agendar uma avaliação gratuita sem compromisso!`
+                              )}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-98"
+                            >
+                              <Phone className="w-4 h-4 fill-white" />
+                              <span>Solicitar Avaliação Grátis</span>
+                            </a>
+                            <p className="text-[10px] text-neutral-500 text-center mt-3 leading-relaxed font-medium">
+                              Nossos orçamentos presenciais em Caruaru são 100% gratuitos e levam até 2 horas.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Sales Funnel: How it works section */}
+            <section className="bg-white py-20 border-b border-neutral-100" id="how-it-works-section">
+              <div className="max-w-5xl mx-auto px-6 space-y-16">
+                {/* Section Header */}
+                <div className="text-center space-y-3 max-w-2xl mx-auto">
+                  <span className="text-[10px] font-bold text-neutral-800 uppercase tracking-widest font-mono bg-neutral-100 px-3 py-1 rounded-full border border-neutral-200/50">Atendimento</span>
+                  <h2 className="text-2xl sm:text-4xl font-black text-neutral-900 tracking-tight leading-tight">Como funciona o nosso conserto</h2>
+                  <p className="text-neutral-500 text-xs sm:text-sm font-medium leading-relaxed">
+                    Nossa assistência é projetada com alto rigor operacional para garantir rapidez, total segurança e conveniência do início ao fim.
+                  </p>
+                </div>
+
+                {/* Steps Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                  {[
+                    {
+                      step: "01",
+                      title: "Agendamento",
+                      badge: "WhatsApp",
+                      desc: "Consulte nosso simulador ou mande uma mensagem. Agendamos a entrega presencial ou acionamos o sistema Leva e Traz."
+                    },
+                    {
+                      step: "02",
+                      title: "Laudo Gratuito",
+                      badge: "Em até 2 horas",
+                      desc: "Técnicos seniores realizam a perícia minuciosa do aparelho sem cobrar taxa de diagnóstico ou orçamento."
+                    },
+                    {
+                      step: "03",
+                      title: "Reparo de Elite",
+                      badge: "Peças Premium",
+                      desc: "Consertamos o dispositivo no mesmo dia usando componentes rigorosamente testados de máxima durabilidade."
+                    },
+                    {
+                      step: "04",
+                      title: "Entrega Certificada",
+                      badge: "Até 360 Dias",
+                      desc: "Você recebe o celular totalmente limpo, testado com checklist rigoroso e termo de garantia estendida."
+                    }
+                  ].map((item, idx) => (
+                    <div 
+                      key={idx} 
+                      className="flex flex-col justify-between space-y-4"
+                    >
+                      <div className="space-y-4">
+                        <div className="flex items-end justify-between border-b border-neutral-100 pb-3">
+                          <span className="text-4xl font-black text-neutral-200 font-mono leading-none">{item.step}</span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-neutral-50 border border-neutral-200/50 text-[9px] font-bold tracking-wider uppercase text-neutral-600">
+                            {item.badge}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="font-bold text-neutral-900 text-sm sm:text-base tracking-tight">{item.title}</h4>
+                          <p className="text-neutral-400 text-xs leading-relaxed font-medium">{item.desc}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </section>
 
             {/* Blog & News Section */}
-            <section className="max-w-6xl mx-auto px-4 py-16 scroll-mt-24" id="blog-section">
-              <div className="space-y-8">
+            <section className="bg-neutral-50/30 py-20 border-b border-neutral-100" id="blog-section">
+              <div className="max-w-5xl mx-auto px-6 space-y-10">
                 {/* Section Header */}
-                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                  <div className="space-y-1">
-                    <h3 className="text-xs font-bold text-indigo-600 uppercase tracking-wider font-mono">Nosso Blog</h3>
-                    <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">Dicas & Novidades Tecnológicas</h2>
-                    <p className="text-xs text-slate-500 max-w-lg leading-normal">
-                      Aprenda a cuidar melhor dos seus eletrônicos com as orientações técnicas da nossa equipe.
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-bold text-neutral-800 uppercase tracking-wider font-mono bg-neutral-100 px-3 py-1 rounded-full border border-neutral-200/50">Conteúdo</span>
+                    <h2 className="text-2xl sm:text-3.5xl font-black text-neutral-900 tracking-tight leading-none pt-1">Dicas & Novidades</h2>
+                    <p className="text-neutral-500 text-xs sm:text-sm font-medium leading-relaxed max-w-lg">
+                      Orientações técnicas exclusivas elaboradas por especialistas para aumentar a vida útil dos seus aparelhos.
                     </p>
                   </div>
 
                   {/* Search bar */}
-                  <div className="relative w-full sm:w-72">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <div className="relative w-full sm:w-72 shrink-0">
+                    <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input 
                       type="text"
                       placeholder="Buscar artigos..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2 rounded-xl bg-white border border-slate-200 text-sm focus:outline-none focus:border-indigo-500 text-slate-700"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-full bg-white border border-neutral-200 text-xs focus:outline-none focus:border-neutral-900 text-neutral-800 font-medium placeholder-neutral-400 transition-all shadow-3xs"
                     />
                   </div>
                 </div>
 
                 {/* Category filters */}
-                <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200/60 pb-4">
+                <div className="flex flex-wrap items-center gap-1.5 border-b border-neutral-100 pb-5">
                   {categories.map((cat) => (
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all cursor-pointer ${
+                      className={`px-4.5 py-1.5 rounded-full text-xs font-bold tracking-tight transition-all cursor-pointer ${
                         selectedCategory === cat 
-                          ? "bg-slate-900 text-white" 
-                          : "bg-white border border-slate-200 hover:border-slate-300 text-slate-600"
+                          ? "bg-neutral-900 text-white shadow-2xs" 
+                          : "bg-white border border-neutral-200 hover:border-neutral-300 text-neutral-600"
                       }`}
                     >
                       {cat}
@@ -699,16 +953,16 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
 
                 {/* Grid List */}
                 {loading ? (
-                  <div className="text-center py-20 text-slate-400 space-y-3">
-                    <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin mx-auto"></div>
-                    <p className="text-xs font-medium">Buscando dicas exclusivas para você...</p>
+                  <div className="text-center py-20 text-neutral-400 space-y-3">
+                    <div className="w-6 h-6 rounded-full border-2 border-neutral-900 border-t-transparent animate-spin mx-auto"></div>
+                    <p className="text-xs font-semibold">Buscando dicas exclusivas para você...</p>
                   </div>
                 ) : filteredPosts.length === 0 ? (
-                  <div className="text-center py-20 rounded-2xl bg-white border border-slate-200">
-                    <p className="text-slate-400 text-sm font-medium">Nenhum artigo encontrado para a pesquisa.</p>
+                  <div className="text-center py-20 rounded-2xl bg-white border border-neutral-150">
+                    <p className="text-neutral-400 text-xs font-bold">Nenhum artigo encontrado para a pesquisa.</p>
                     <button 
                       onClick={() => { setSearchQuery(""); setSelectedCategory("Todas"); }}
-                      className="mt-3 text-indigo-600 hover:underline text-xs font-semibold cursor-pointer"
+                      className="mt-3 text-neutral-900 hover:underline text-xs font-bold cursor-pointer"
                     >
                       Limpar Filtros e Mostrar Todos
                     </button>
@@ -718,17 +972,17 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
                     {filteredPosts.map((post) => (
                       <article 
                         key={post.id} 
-                        className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col hover:shadow-md hover:border-slate-300 transition-all group hover:-translate-y-0.5"
+                        className="bg-white rounded-2xl border border-neutral-150 overflow-hidden flex flex-col hover:shadow-2xs transition-all group cursor-pointer"
                       >
                         {/* Image wrapper */}
-                        <div className="h-48 w-full overflow-hidden relative cursor-pointer" onClick={() => handlePostClick(post)}>
+                        <div className="h-48 w-full overflow-hidden relative" onClick={() => handlePostClick(post)}>
                           <img 
                             src={post.coverImage} 
                             alt={post.title}
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102"
                           />
                           <div className="absolute top-3 left-3">
-                            <span className="px-2 py-1 rounded bg-indigo-600 text-white text-[10px] font-bold tracking-tight uppercase shadow">
+                            <span className="px-2.5 py-1 rounded-full bg-neutral-950/80 backdrop-blur-md text-white text-[9px] font-bold tracking-wider uppercase font-mono">
                               {post.category}
                             </span>
                           </div>
@@ -737,36 +991,36 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
                         {/* Content */}
                         <div className="p-5 flex-grow flex flex-col justify-between space-y-4">
                           <div className="space-y-2">
-                            <span className="text-[10px] font-mono font-bold text-slate-400 flex items-center gap-1">
+                            <span className="text-[10px] font-mono font-bold text-neutral-400 flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
                               {post.publishedAt.split("-").reverse().join("/")}
-                              <span className="text-slate-300">•</span>
+                              <span className="text-neutral-300">•</span>
                               <Clock className="w-3 h-3" />
                               {post.readTime}
                             </span>
                             
                             <h4 
                               onClick={() => handlePostClick(post)}
-                              className="font-bold text-slate-900 text-base leading-tight hover:text-indigo-600 transition-colors cursor-pointer line-clamp-2"
+                              className="font-bold text-neutral-900 text-sm sm:text-base leading-snug hover:text-neutral-500 transition-colors line-clamp-2"
                             >
                               {post.title}
                             </h4>
 
-                            <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
+                            <p className="text-xs text-neutral-400 leading-relaxed font-medium line-clamp-2">
                               {post.excerpt}
                             </p>
                           </div>
 
-                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                          <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
                             <button 
                               onClick={() => handlePostClick(post)}
-                              className="text-indigo-600 hover:text-indigo-500 font-bold text-xs flex items-center gap-1 group/btn cursor-pointer"
+                              className="text-neutral-900 hover:text-neutral-700 font-bold text-xs flex items-center gap-1 group/btn"
                             >
                               <span>Ler Artigo</span>
                               <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover/btn:translate-x-1" />
                             </button>
                             
-                            <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1 font-mono">
+                            <span className="text-[10px] font-medium text-neutral-400 flex items-center gap-1 font-mono">
                               <Eye className="w-3 h-3" />
                               {post.views || 0}
                             </span>
@@ -780,22 +1034,20 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
             </section>
 
             {/* Testimonials (Depoimentos) Section */}
-            <section className="bg-gradient-to-b from-white to-slate-50 border-t border-slate-200/80 py-20 relative overflow-hidden" id="public-testimonials-section">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-              
-              <div className="max-w-6xl mx-auto px-4 space-y-12 relative z-10">
+            <section className="bg-white py-20 border-b border-neutral-100 relative overflow-hidden" id="public-testimonials-section">
+              <div className="max-w-5xl mx-auto px-6 space-y-16 relative z-10">
                 {/* Section Header */}
                 <div className="text-center space-y-3 max-w-2xl mx-auto">
-                  <span className="text-xs font-bold text-amber-600 uppercase tracking-widest font-mono bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100 shadow-2xs">Prova Social</span>
-                  <h2 className="text-2xl sm:text-4.5xl font-extrabold text-slate-950 tracking-tight">O que dizem nossos clientes</h2>
-                  <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
-                    A satisfação dos nossos clientes é o nosso maior selo de qualidade. Confira avaliações reais de quem já realizou serviços de manutenção com a gente.
+                  <span className="text-[10px] font-bold text-neutral-800 uppercase tracking-widest font-mono bg-neutral-100 px-3 py-1 rounded-full border border-neutral-200/50">Avaliações</span>
+                  <h2 className="text-2xl sm:text-4xl font-black text-neutral-900 tracking-tight leading-tight">O que dizem nossos clientes</h2>
+                  <p className="text-neutral-500 text-xs sm:text-sm font-medium leading-relaxed">
+                    A excelência em assistência técnica atestada por quem confia em nosso serviço.
                   </p>
                 </div>
 
                 {/* Grid List */}
                 {!config.testimonials || config.testimonials.length === 0 ? (
-                  <div className="text-center py-10 text-slate-400 text-xs">
+                  <div className="text-center py-10 text-neutral-400 text-xs">
                     Nenhum depoimento cadastrado no momento.
                   </div>
                 ) : (
@@ -803,37 +1055,34 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
                     {config.testimonials.map((t) => (
                       <div 
                         key={t.id} 
-                        className="bg-white p-6 rounded-2xl border border-slate-200/80 hover:border-slate-300 shadow-xs hover:shadow-md transition-all duration-300 relative group flex flex-col justify-between"
+                        className="bg-neutral-50/50 p-6 rounded-2xl border border-neutral-150 transition-all flex flex-col justify-between"
                         id={`public-testimonial-${t.id}`}
                       >
-                        {/* Big quote mark */}
-                        <span className="absolute top-4 right-5 text-amber-400/10 text-6xl font-serif select-none pointer-events-none group-hover:text-amber-400/20 transition-colors">“</span>
-                        
                         <div className="space-y-4">
                           {/* Stars */}
                           <div className="flex items-center gap-0.5">
                             {Array.from({ length: 5 }).map((_, i) => (
                               <Star 
                                 key={i} 
-                                className={`w-3.5 h-3.5 ${i < (t.rating || 5) ? "text-amber-400 fill-amber-400" : "text-slate-200"}`} 
+                                className={`w-3.5 h-3.5 ${i < (t.rating || 5) ? "text-amber-400 fill-amber-400" : "text-neutral-200"}`} 
                               />
                             ))}
                           </div>
 
                           {/* Testimonial text */}
-                          <p className="text-slate-600 text-xs sm:text-sm leading-relaxed italic relative z-10">
+                          <p className="text-neutral-600 text-xs sm:text-sm leading-relaxed italic font-medium">
                             "{t.text}"
                           </p>
                         </div>
 
                         {/* Customer profile */}
-                        <div className="flex items-center gap-3 pt-5 mt-5 border-t border-slate-100">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-amber-600 text-white font-extrabold text-xs tracking-wider flex items-center justify-center font-mono shadow-md shadow-amber-500/10 shrink-0">
+                        <div className="flex items-center gap-3 pt-5 mt-5 border-t border-neutral-200/50">
+                          <div className="w-9 h-9 rounded-full bg-neutral-900 text-white font-extrabold text-xs tracking-wider flex items-center justify-center font-mono shrink-0">
                             {t.avatar || (t.name ? t.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase() : "C")}
                           </div>
                           <div className="min-w-0">
-                            <h4 className="font-bold text-slate-900 text-xs sm:text-sm truncate">{t.name}</h4>
-                            <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400 font-medium">
+                            <h4 className="font-bold text-neutral-900 text-xs sm:text-sm truncate">{t.name}</h4>
+                            <div className="flex items-center gap-1.5 mt-0.5 text-[9px] text-neutral-400 font-bold uppercase tracking-wider">
                               <span className="truncate">{t.role || "Cliente"}</span>
                               <span>•</span>
                               <span className="shrink-0 font-mono">{t.date || "Recente"}</span>
@@ -846,133 +1095,151 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
                 )}
                 
                 {/* Stats badge to reinforce credibility */}
-                <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-12 pt-8 border-t border-slate-200/60 max-w-3xl mx-auto" id="credibility-stats">
+                <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-12 pt-8 border-t border-neutral-100 max-w-3xl mx-auto" id="credibility-stats">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100/50">
-                      <Star className="w-5 h-5 fill-amber-600" />
+                    <div className="w-10 h-10 rounded-full bg-neutral-50 text-neutral-900 flex items-center justify-center shrink-0 border border-neutral-200/50">
+                      <Star className="w-4 h-4 fill-neutral-800 text-neutral-800" />
                     </div>
                     <div>
-                      <p className="font-extrabold text-slate-900 text-base leading-none">4.9 / 5.0</p>
-                      <p className="text-[10px] text-slate-400 font-medium mt-1">Média de satisfação geral</p>
+                      <p className="font-bold text-neutral-900 text-sm leading-none">4.9 / 5.0</p>
+                      <p className="text-[10px] text-neutral-400 font-bold mt-1">Média de satisfação geral</p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100/50">
-                      <ThumbsUp className="w-5 h-5 text-indigo-600 fill-indigo-600/10" />
+                    <div className="w-10 h-10 rounded-full bg-neutral-50 text-neutral-900 flex items-center justify-center shrink-0 border border-neutral-200/50">
+                      <ThumbsUp className="w-4 h-4 text-neutral-800 fill-neutral-800/10" />
                     </div>
                     <div>
-                      <p className="font-extrabold text-slate-900 text-base leading-none">100%</p>
-                      <p className="text-[10px] text-slate-400 font-medium mt-1">De garantia e suporte pós-reparo</p>
+                      <p className="font-bold text-neutral-900 text-sm leading-none">100%</p>
+                      <p className="text-[10px] text-neutral-400 font-bold mt-1">Garantia pós-reparo</p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100/50">
-                      <MessageSquare className="w-5 h-5 text-emerald-600 fill-emerald-600/10" />
+                    <div className="w-10 h-10 rounded-full bg-neutral-50 text-neutral-900 flex items-center justify-center shrink-0 border border-neutral-200/50">
+                      <MessageSquare className="w-4 h-4 text-neutral-800 fill-neutral-800/10" />
                     </div>
                     <div>
-                      <p className="font-extrabold text-slate-900 text-base leading-none">Suporte Real</p>
-                      <p className="text-[10px] text-slate-400 font-medium mt-1">Via WhatsApp 24h/7</p>
+                      <p className="font-bold text-neutral-900 text-sm leading-none">Suporte Real</p>
+                      <p className="text-[10px] text-neutral-400 font-bold mt-1">Via WhatsApp 24h/7</p>
                     </div>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Informational Store Contact / FAQ / Location Section */}
-            <section className="bg-slate-100 border-t border-slate-200 py-16">
-              <div className="max-w-6xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-12">
-                
-                {/* Store Details */}
-                <div className="lg:col-span-5 space-y-6">
-                  <div className="space-y-1">
-                    <h3 className="text-xs font-bold text-indigo-600 uppercase tracking-wider font-mono">Nossa Loja</h3>
-                    <h2 className="text-xl sm:text-2xl font-extrabold text-slate-950 tracking-tight">Onde nos Encontrar</h2>
-                  </div>
-
-                  <p className="text-slate-500 text-xs leading-relaxed">
-                    Venha nos visitar em nosso espaço físico. <span className="text-slate-400 block mt-1.5 text-[11px] font-medium italic">(Em breve: ativaremos nossa modalidade de Delivery para retirada e entrega de aparelhos no conforto da sua residência!)</span>
+            {/* Dedicated FAQ Section */}
+            <section className="bg-neutral-50/50 py-20 border-b border-neutral-100" id="faq-section">
+              <div className="max-w-3xl mx-auto px-6 space-y-12">
+                <div className="text-center space-y-3 max-w-xl mx-auto">
+                  <span className="text-[10px] font-bold text-neutral-800 uppercase tracking-wider font-mono bg-neutral-100 px-3 py-1 rounded-full border border-neutral-200/50">FAQ</span>
+                  <h2 className="text-2xl sm:text-3.5xl font-black text-neutral-900 tracking-tight leading-tight">Perguntas Frequentes</h2>
+                  <p className="text-neutral-500 text-xs sm:text-sm font-medium leading-relaxed">
+                    Tire suas principais dúvidas sobre o nosso processo de diagnóstico, prazo de reparo e termos de garantia.
                   </p>
-
-                  <div className="space-y-3 font-medium text-slate-700 text-xs">
-                    <div className="flex items-start gap-3">
-                      <MapPin className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-bold text-slate-900">Endereço</p>
-                        <p className="text-slate-500 mt-0.5">{config.address}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <Clock className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-bold text-slate-900">Horário de Atendimento</p>
-                        <p className="text-slate-500 mt-0.5">{config.businessHours}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <Phone className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-bold text-slate-900">Telefone & WhatsApp</p>
-                        <p className="text-slate-500 mt-0.5">{config.phone}</p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
-                {/* FAQ quick widget */}
-                <div className="lg:col-span-7 space-y-6">
-                  <div className="space-y-1">
-                    <h3 className="text-xs font-bold text-indigo-600 uppercase tracking-wider font-mono">Dúvidas Comuns</h3>
-                    <h2 className="text-xl sm:text-2xl font-extrabold text-slate-950 tracking-tight">Perguntas Frequentes</h2>
-                  </div>
-
-                  <div className="space-y-3.5" id="landing-faq-list">
-                    {config.faqs && config.faqs.slice(0, 4).map((faq) => (
-                      <div key={faq.id} className="p-4 rounded-xl bg-white border border-slate-200/80 shadow-xs space-y-1.5" id={`faq-public-${faq.id}`}>
-                        <h4 className="font-bold text-slate-900 text-xs sm:text-sm">{faq.question}</h4>
-                        <p className="text-xs text-slate-500 leading-relaxed">{faq.answer}</p>
-                      </div>
-                    ))}
-                  </div>
+                <div className="space-y-4 font-sans" id="landing-faq-list">
+                  {config.faqs && config.faqs.slice(0, 5).map((faq) => (
+                    <div key={faq.id} className="p-5 rounded-2xl bg-white border border-neutral-150 space-y-1.5 shadow-3xs" id={`faq-public-${faq.id}`}>
+                      <h4 className="font-bold text-neutral-900 text-xs sm:text-sm leading-snug">{faq.question}</h4>
+                      <p className="text-xs text-neutral-400 leading-relaxed font-medium">{faq.answer}</p>
+                    </div>
+                  ))}
                 </div>
-
               </div>
             </section>
           </div>
         )}
       </div>
 
-      {/* Public Footer */}
-      <footer className="bg-slate-950 text-slate-400 py-10 mt-auto border-t border-slate-900 text-xs" id="public-footer">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div 
-            className="flex items-center gap-2.5 group cursor-pointer" 
-            onClick={() => { setActivePost(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-            title="Voltar ao início"
-          >
-            <div className="w-8 h-8 rounded bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
-              <img 
-                src={logoUrl} 
-                alt="AndMicrocell Logo" 
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
-                referrerPolicy="no-referrer" 
-              />
+      {/* Public Footer with integrated Contact and Address Details */}
+      <footer className="bg-neutral-950 text-neutral-400 py-16 mt-auto border-t border-neutral-900 text-xs font-medium" id="public-footer">
+        <div className="max-w-5xl mx-auto px-6 space-y-12">
+          {/* Main Footer Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
+            {/* Column 1: Brand & Bio */}
+            <div className="md:col-span-4 space-y-4">
+              <div 
+                className="flex items-center gap-3 group cursor-pointer inline-flex" 
+                onClick={() => { setActivePost(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                title="Voltar ao início"
+              >
+                <div className="h-10 px-3 py-1 bg-white rounded-xl flex items-center justify-center transition-transform duration-300 shadow-sm shrink-0">
+                  <img 
+                    src={logoUrl} 
+                    alt="AndMicrocell Logo" 
+                    className="h-8 w-auto object-contain" 
+                    referrerPolicy="no-referrer" 
+                  />
+                </div>
+                <span className="font-black text-white text-base tracking-tight transition-colors duration-300">
+                  {config.name}
+                </span>
+              </div>
+              <p className="text-neutral-500 text-xs leading-relaxed max-w-xs">
+                Especialistas em manutenção avançada de smartphones e notebooks. Reparos rápidos de alta precisão com componentes premium e até 360 dias de garantia.
+              </p>
             </div>
-            <span className="font-bold text-white text-[13px] tracking-tight group-hover:text-indigo-400 transition-colors duration-300">
-              {config.name}
-            </span>
+
+            {/* Column 2: Location/Address details */}
+            <div className="md:col-span-4 space-y-3">
+              <h4 className="text-white font-bold tracking-wider text-[10px] uppercase font-mono">Nosso Endereço</h4>
+              <div className="flex items-start gap-2.5 text-neutral-400">
+                <MapPin className="w-4 h-4 text-neutral-500 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="leading-relaxed text-xs font-semibold">{config.address}</p>
+                  <p className="text-neutral-500 text-[10px] italic">Atendimento presencial e modalidade Delivery para coleta e entrega rápida.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Column 3: Business Hours & Phone contact */}
+            <div className="md:col-span-4 space-y-3">
+              <h4 className="text-white font-bold tracking-wider text-[10px] uppercase font-mono">Contato & Atendimento</h4>
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2.5 text-neutral-400">
+                  <Clock className="w-4 h-4 text-neutral-500 shrink-0" />
+                  <span className="text-xs font-semibold">{config.businessHours}</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-neutral-400">
+                  <Phone className="w-4 h-4 text-neutral-500 shrink-0" />
+                  <span className="text-xs font-bold font-mono text-white">{config.phone}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-wrap justify-center items-center gap-4 sm:gap-6 text-slate-500">
-            <a href="/politica" target="_blank" className="hover:text-indigo-400 transition-colors">Política de Privacidade</a>
-            <span className="text-slate-800">|</span>
-            <p className="text-slate-600 text-[11px]">&copy; 2026 {config.name}. Todos os direitos reservados.</p>
+          {/* Bottom Copyright Row */}
+          <div className="pt-8 border-t border-neutral-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-600 text-[11px] font-medium">
+            <p>&copy; 2026 {config.name}. Todos os direitos reservados.</p>
+            <div className="flex items-center gap-1.5 text-neutral-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="font-mono text-[10px] tracking-wider uppercase">Laboratório de Alta Precisão</span>
+            </div>
           </div>
         </div>
       </footer>
+
+      {/* Floating WhatsApp Action Button */}
+      <div className="fixed bottom-6 right-6 z-50 group flex flex-col items-end">
+        {/* Hover message */}
+        <div className="bg-neutral-950 text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-2 rounded-full shadow-lg border border-neutral-850 mb-2 mr-1 scale-0 group-hover:scale-100 origin-bottom-right transition-all duration-300 pointer-events-none whitespace-nowrap">
+          💬 Fale Conosco no WhatsApp
+        </div>
+        <a
+          href={getWhatsAppLink()}
+          target="_blank"
+          rel="noreferrer"
+          className="w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-md active:scale-95 transition-all duration-300 relative"
+          aria-label="Fale conosco no WhatsApp"
+        >
+          {/* Pulsing ring animation */}
+          <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-25"></span>
+          <Phone className="w-5 h-5 fill-white text-white relative z-10" />
+        </a>
+      </div>
     </div>
   );
 }

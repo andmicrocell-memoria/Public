@@ -329,6 +329,66 @@ async function runFirebaseMigrations() {
 const inMemoryHistoryCache: Record<string, any[]> = {};
 const processedMessageIds = new Set<string>();
 
+// Helper to download audio attachment with authentication headers and storage redirects
+async function downloadAudio(rawUrl: string, baseUrl?: string, apiToken?: string): Promise<Buffer> {
+  if (!rawUrl) {
+    throw new Error("URL de áudio não fornecida.");
+  }
+
+  // Handle relative URLs (e.g. /rails/active_storage/blobs/redirect/...)
+  let targetUrl = rawUrl.trim();
+  if (targetUrl.startsWith("/")) {
+    const cleanBase = (baseUrl || "https://atendimento.andmicrocell.com.br").replace(/\/+$/, "");
+    targetUrl = `${cleanBase}${targetUrl}`;
+  }
+
+  console.log(`[Audio Downloader] Baixando de: ${targetUrl}`);
+
+  // Check if URL points to external storage (S3, Cloudflare R2, Google Cloud Storage, MinIO, Wasabi, etc.)
+  const isExternalStorage = /^https?:\/\/[^\/]*(s3[.-]|amazonaws\.com|cloudflarestorage\.com|storage\.googleapis\.com|digitaloceanspaces\.com|backblazeb2\.com)/i.test(targetUrl);
+
+  // If it's direct cloud storage, S3 rejects custom unrecognized headers like 'api-access-token' with 400 Bad Request
+  if (isExternalStorage) {
+    console.log(`[Audio Downloader] Link direto de armazenamento (S3/Cloud). Baixando sem headers extras...`);
+    try {
+      const res = await fetch(targetUrl);
+      if (res.ok) {
+        const arrayBuffer = await res.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+      }
+    } catch (e: any) {
+      console.warn(`[Audio Downloader] Falha ao baixar diretamente do S3: ${e.message}`);
+    }
+  }
+
+  // Try with api-access-token header if available
+  const headers: any = {};
+  if (apiToken) {
+    headers['api-access-token'] = apiToken;
+  }
+  
+  let res = await fetch(targetUrl, { headers });
+  
+  if (!res.ok) {
+    console.warn(`[Audio Downloader] Falha ao baixar com token da API (Status ${res.status}). Tentando sem headers...`);
+    res = await fetch(targetUrl);
+  }
+  
+  if (!res.ok && apiToken) {
+    console.warn(`[Audio Downloader] Tentando com cabeçalho Bearer...`);
+    res = await fetch(targetUrl, {
+      headers: { 'Authorization': `Bearer ${apiToken}` }
+    });
+  }
+  
+  if (!res.ok) {
+    throw new Error(`Não foi possível baixar o arquivo de áudio. Status retornado: ${res.status}`);
+  }
+  
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 // Helper to get conversation history
 async function getWhatsAppHistory(fromNumber: string): Promise<any[]> {
   const cleanNumber = String(fromNumber).replace(/\D/g, "");
@@ -803,6 +863,46 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
 10. Encerramento Objetivo da Conversa: Quando o cliente se despedir, agradecer ("Obrigado", "Valeu", "Tudo certo", "Entendido", "Tchau", "Boa noite", etc.) ou der sinais claros de que a dúvida foi resolvida e o atendimento se encerrou, responda de forma final, extremamente direta, amigável e objetiva. NUNCA faça novas perguntas redundantes ("Posso ajudar em algo mais?") ou tente prolongar a conversa desnecessariamente. Apenas agradeça, deseje um excelente dia/noite ou agende um horário para ele trazer o aparelho, e encerre por ali.`;
   };
 
+  // Live Audio Transcription API using Gemini 2.5 Flash
+  app.post("/api/agent/transcribe-audio", async (req, res) => {
+    try {
+      const { audioBase64, mimeType = "audio/webm" } = req.body;
+
+      if (!audioBase64) {
+        return res.status(400).json({ error: "Nenhum dado de áudio fornecido." });
+      }
+
+      // Clean base64 string if it contains data URI prefix
+      const cleanBase64 = audioBase64.replace(/^data:audio\/[a-zA-Z0-9.-]+;base64,/, "");
+
+      const client = getGeminiClient();
+      const response = await client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          {
+            inlineData: {
+              data: cleanBase64,
+              mimeType: mimeType.split(";")[0]
+            }
+          },
+          "Transcreva este áudio em português brasileiro de forma extremamente limpa, natural e fiel. Retorne APENAS a transcrição literal do áudio falado, sem adicionar nenhuma explicação, sem aspas, sem prefixos ou comentários adicionais."
+        ]
+      });
+
+      const transcription = (response.text || "").trim();
+      return res.json({ 
+        success: true, 
+        transcription: transcription || "Áudio recebido (sem fala compreensível)" 
+      });
+    } catch (err: any) {
+      console.error("[Transcribe Audio API Error]:", err.message);
+      return res.status(500).json({ 
+        success: false, 
+        error: err.message || "Falha ao transcrever o áudio." 
+      });
+    }
+  });
+
   // Live WhatsApp Chat Simulation API
   app.post("/api/agent/chat", async (req, res) => {
     try {
@@ -945,6 +1045,15 @@ Instruções importantes:
       return res.json(config);
     }
     return res.status(404).json({ error: "Configuração não encontrada" });
+  });
+
+  // Tunnel URL endpoint requested by App.tsx
+  app.get("/api/tunnel", (req, res) => {
+    const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+    const host = req.headers["x-forwarded-host"] || req.get("host") || "";
+    const baseUrl = `${protocol}://${host}`;
+    const url = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || baseUrl;
+    res.json({ url });
   });
 
   // Public Privacy Policy endpoint for Meta / WhatsApp configuration
@@ -1777,14 +1886,47 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
 
       const rawMessageId = body.id ? String(body.id) : null;
       const messageId = rawMessageId ? `cw-${rawMessageId}` : `cw-${Date.now()}`;
-      const messageText = body.content || "";
+      let messageText = body.content || "";
       const chatwootAccountId = body.account?.id || body.account_id;
       const chatwootConversationId = body.conversation?.id || body.conversation_id;
       const customerName = body.sender?.name || body.contact?.name || body.conversation?.contact?.name || "Cliente Chatwoot";
       const fromNumber = body.contact?.phone_number || body.sender?.phone_number || body.conversation?.contact?.phone_number || `cw-${chatwootConversationId}`;
 
-      if (!messageText || !messageText.trim()) {
-        console.log("[Chatwoot Webhook] Ignorando mensagem vazia ou sem texto.");
+      // Search for any audio attachment in the Chatwoot payload across all possible attachment structures
+      const attachments = [
+        ...(Array.isArray(body?.attachments) ? body.attachments : []),
+        ...(Array.isArray(body?.message?.attachments) ? body.message.attachments : []),
+        ...(Array.isArray(body?.conversation?.messages?.[0]?.attachments) ? body.conversation.messages[0].attachments : []),
+        ...(body?.attachment ? [body.attachment] : [])
+      ];
+
+      const audioAttachment = attachments.find((att: any) => {
+        if (!att) return false;
+        const type = String(att.file_type || att.type || "").toLowerCase();
+        const mime = String(att.content_type || att.mime_type || "").toLowerCase();
+        const ext = String(att.extension || "").toLowerCase();
+        const url = String(att.data_url || att.file_url || att.url || att.download_url || att.blob_url || "").toLowerCase();
+        
+        return (
+          type === "audio" || 
+          type === "voice" || 
+          mime.startsWith("audio/") || 
+          mime.startsWith("video/ogg") || 
+          ["ogg", "oga", "opus", "mp3", "wav", "m4a", "aac", "weba", "webm"].includes(ext) ||
+          /\.(ogg|oga|opus|mp3|wav|m4a|aac|weba|webm)(\?.*)?$/i.test(url)
+        );
+      });
+
+      const rawAudioUrl = audioAttachment ? (
+        audioAttachment.data_url || 
+        audioAttachment.file_url || 
+        audioAttachment.url || 
+        audioAttachment.download_url || 
+        audioAttachment.blob_url
+      ) : null;
+
+      if ((!messageText || !messageText.trim()) && !audioAttachment && !rawAudioUrl) {
+        console.log("[Chatwoot Webhook] Ignorando mensagem vazia ou sem texto/áudio.");
         return res.status(200).send("EMPTY_MESSAGE_IGNORED");
       }
 
@@ -1831,6 +1973,11 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
           return;
         }
 
+        const chatwootUrl = (storedConfig?.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim();
+        const rawToken = (storedConfig?.chatwootApiAccessToken || process.env.CHATWOOT_API_ACCESS_TOKEN || "Q1DpLpBXSGYWVP7VGunkEkwL").trim();
+        const chatwootApiAccessToken = rawToken.replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim();
+        const cleanUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
+
         // Check if the robot auto-response is enabled in settings
         if (storedConfig.autoRespondWhatsApp !== true) {
           addWebhookLog('system', `Mensagem do Chatwoot recebida (Robô Desativado)`, `O robô recebeu a mensagem de ${customerName}, mas não respondeu porque o botão "Responder Automaticamente" está desativado nas configurações.`);
@@ -1857,6 +2004,94 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
           return;
         }
 
+        // --- AUDIO PROCESSING ENHANCEMENT ---
+        if (rawAudioUrl) {
+          try {
+            console.log(`[Audio Processing] Iniciando download do áudio de: ${rawAudioUrl}`);
+            addWebhookLog('system', `Processando áudio de ${customerName}`, `Baixando arquivo de voz para transcrição...`);
+            
+            const fileBuffer = await downloadAudio(rawAudioUrl, cleanUrl, chatwootApiAccessToken);
+            
+            // Sanitize mimeType for Gemini inlineData
+            let cleanMime = (audioAttachment?.content_type || audioAttachment?.mime_type || "audio/ogg")
+              .split(";")[0]
+              .trim()
+              .toLowerCase();
+
+            if (cleanMime === "audio/opus" || cleanMime === "audio/oga" || cleanMime === "application/ogg" || cleanMime === "video/ogg") {
+              cleanMime = "audio/ogg";
+            } else if (cleanMime === "audio/x-m4a" || cleanMime === "audio/m4a") {
+              cleanMime = "audio/mp4";
+            } else if (cleanMime === "audio/mpeg") {
+              cleanMime = "audio/mp3";
+            } else if (!cleanMime.startsWith("audio/")) {
+              cleanMime = "audio/ogg";
+            }
+
+            console.log(`[Audio Processing] Download concluído (${fileBuffer.length} bytes, MIME: ${cleanMime}). Transcrevendo com Gemini...`);
+            addWebhookLog('system', `Transcrevendo áudio de ${customerName}`, `Enviando arquivo ao Gemini (${fileBuffer.length} bytes, formato ${cleanMime})...`);
+
+            const client = getGeminiClient();
+            const response = await client.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: [
+                {
+                  inlineData: {
+                    data: fileBuffer.toString("base64"),
+                    mimeType: cleanMime
+                  }
+                },
+                "Transcreva este áudio em português brasileiro de forma extremamente fiel e limpa. Retorne APENAS a transcrição literal do áudio, sem adicionar nenhuma introdução, explicações, comentários ou tags adicionais."
+              ]
+            });
+
+            const audioTranscription = (response.text || "").trim();
+            console.log(`[Audio Processing] Transcrição concluída: "${audioTranscription}"`);
+            
+            if (audioTranscription) {
+              addWebhookLog('system', `Áudio de ${customerName} transcrito com sucesso`, `Texto: "${audioTranscription}"`);
+              messageText = `[Áudio do cliente]: ${audioTranscription}`;
+            } else {
+              console.log("[Audio Processing] O áudio parece estar silencioso ou sem fala compreensível.");
+              addWebhookLog('system', `Áudio de ${customerName} processado`, `O áudio está silencioso ou não foi possível extrair a fala.`);
+              messageText = `[Áudio do cliente]: (áudio curto ou silencioso)`;
+            }
+          } catch (audioErr: any) {
+            console.error("[Audio Processing] Erro ao baixar ou transcrever áudio:", audioErr.message);
+            addWebhookLog('error', `Falha ao processar áudio de ${customerName}`, `Erro: ${audioErr.message}`);
+            
+            const errorMessage = `Olá, ${customerName}! Recebi a sua mensagem de áudio, mas tive uma pequena oscilação técnica de conexão ao tentar reproduzir. 🎧 Poderia, por favor, me enviar sua dúvida ou modelo por mensagem de texto? Eu já te respondo na hora com o orçamento completo!`;
+            
+            // Fetch history to save properly
+            const currentHistory = await getWhatsAppHistory(fromNumber);
+            const updatedHistory = [
+              ...currentHistory,
+              { role: "user", text: "[Mensagem de Áudio - Falha no processamento]", timestamp: new Date().toISOString() },
+              { role: "model", text: errorMessage, timestamp: new Date().toISOString() }
+            ];
+            await saveWhatsAppHistory(fromNumber, updatedHistory, customerName);
+
+            // Send failure message via Chatwoot API
+            const fallbackAccountId = chatwootAccountId || storedConfig.chatwootAccountId || 1;
+            if (chatwootApiAccessToken && fallbackAccountId && chatwootConversationId) {
+              await fetch(`${cleanUrl}/api/v1/accounts/${fallbackAccountId}/conversations/${chatwootConversationId}/messages`, {
+                method: 'POST',
+                headers: {
+                  'api-access-token': chatwootApiAccessToken,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  content: errorMessage,
+                  message_type: "outgoing",
+                  private: false
+                })
+              });
+            }
+            return; // Terminate execution for this webhook message
+          }
+        }
+        // ------------------------------------
+
         // 4. Mark as processed in Firestore before responding to avoid race conditions
         if (messageId && db) {
           try {
@@ -1872,11 +2107,6 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
         }
 
         addWebhookLog('inbound', `Mensagem de ${customerName} recebida via Chatwoot (Conversa #${chatwootConversationId})`, messageText);
-
-        const chatwootUrl = (storedConfig?.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim();
-        const rawToken = (storedConfig?.chatwootApiAccessToken || process.env.CHATWOOT_API_ACCESS_TOKEN || "Q1DpLpBXSGYWVP7VGunkEkwL").trim();
-        const chatwootApiAccessToken = rawToken.replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim();
-        const cleanUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
 
         // 5. Mark message as READ immediately in Chatwoot (triggers blue double-checkmarks on WhatsApp)
         if (chatwootApiAccessToken && chatwootAccountId && chatwootConversationId) {
@@ -2009,14 +2239,15 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
         addWebhookLog('outbound', `Resposta gerada pela IA (Chatwoot)`, replyText);
 
         // 7. Send the response via Chatwoot API
-        if (chatwootApiAccessToken && chatwootAccountId && chatwootConversationId) {
+        const finalAccountId = chatwootAccountId || storedConfig.chatwootAccountId || 1;
+        if (chatwootApiAccessToken && finalAccountId && chatwootConversationId) {
           // Small natural pause before sending
           const simulatedTypingMs = Math.min(Math.max(600, replyText.length * 8), 1800);
           addWebhookLog('system', `Enviando resposta ao cliente`, `Aguardando ${simulatedTypingMs}ms para digitação natural.`);
           await new Promise(resolve => setTimeout(resolve, simulatedTypingMs));
 
           try {
-            const targetUrl = `${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/messages`;
+            const targetUrl = `${cleanUrl}/api/v1/accounts/${finalAccountId}/conversations/${chatwootConversationId}/messages`;
             
             const maskedTokenDebug = chatwootApiAccessToken 
               ? `${chatwootApiAccessToken.substring(0, 4)}...${chatwootApiAccessToken.substring(chatwootApiAccessToken.length - 4)} (len: ${chatwootApiAccessToken.length})`
@@ -2053,7 +2284,7 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
           } finally {
             // Turn off typing indicator and mark seen
             try {
-              await fetch(`${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/toggle_typing_status`, {
+              await fetch(`${cleanUrl}/api/v1/accounts/${finalAccountId}/conversations/${chatwootConversationId}/toggle_typing_status`, {
                 method: 'POST',
                 headers: {
                   'api-access-token': chatwootApiAccessToken,
@@ -2061,7 +2292,7 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
                 },
                 body: JSON.stringify({ typing_status: 'off' })
               });
-              await fetch(`${cleanUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${chatwootConversationId}/update_last_seen`, {
+              await fetch(`${cleanUrl}/api/v1/accounts/${finalAccountId}/conversations/${chatwootConversationId}/update_last_seen`, {
                 method: 'POST',
                 headers: {
                   'api-access-token': chatwootApiAccessToken,

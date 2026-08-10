@@ -53,6 +53,7 @@ export interface ChatMessage {
   mediaUrl?: string;
   mediaType?: 'image' | 'audio' | 'document';
   fileName?: string;
+  audioDuration?: number;
 }
 
 export interface ChatSession {

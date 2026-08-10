@@ -31,7 +31,7 @@ Aqui está o passo a passo exato para configurar tudo em menos de 10 minutos:
 2. Conecte com o seu repositório do GitHub onde você subiu o código, ou faça o upload direto dos arquivos.
 3. Defina as seguintes configurações de build que já deixamos prontas e testadas no seu `package.json`:
    - **Runtime:** `Node`
-   - **Build Command:** `npm run build` (isso irá compilar o site estático e empacotar o backend de forma inteligente)
+   - **Build Command:** `npm install && npm run build` (ou `bun install && bun run build` se preferir Bun - isso garante que todas as dependências como `vite` e `esbuild` sejam instaladas antes de compilar)
    - **Start Command:** `npm run start` (isso iniciará o seu servidor Node.js Express de alta performance)
 
 ### Passo 4: Adicionar as Variáveis de Ambiente
