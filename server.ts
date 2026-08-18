@@ -958,6 +958,35 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
       return `Entendido. Vou tratar isso agora de forma operacional.\nO que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.\nPassos: validar contexto, executar ajuste, testar resultado.\nValidação: confirmar comportamento esperado sem erro e com resposta objetiva.\nPróximo passo: me diga apenas o resultado esperado em 1 frase.`;
     };
 
+    const buildImmediateOpsExecutionReply = (lastUserMessage: string) => {
+      const q = (lastUserMessage || "").toLowerCase();
+      const hasSite = q.includes("site");
+      const hasBot = q.includes("robo") || q.includes("bot");
+      const hasMeta = q.includes("meta") || q.includes("whatsapp");
+      const hasChatwoot = q.includes("chatwoot");
+      const hasGemini = q.includes("gemini") || q.includes("ia");
+      const hasPanel = q.includes("painel");
+
+      const foco = [
+        hasPanel ? "painel" : "",
+        hasSite ? "site" : "",
+        hasBot ? "robo" : "",
+        hasMeta ? "meta api" : "",
+        hasChatwoot ? "chatwoot" : "",
+        hasGemini ? "gemini" : ""
+      ].filter(Boolean).join(", ") || "operacao geral";
+
+      const exec = [
+        `Entendido. Vou executar com foco em ${foco}.`,
+        "Acao agora: validar logs, autenticacao e fluxo ponta a ponta.",
+        "Passos: 1) reproduzir, 2) corrigir origem, 3) testar novamente.",
+        "Validacao: sem erro, resposta objetiva e fluxo estavel.",
+        "Proximo passo: me diga prioridade (rapido, medio ou completo)."
+      ].join("\n");
+
+      return exec;
+    };
+
   // Live Audio Transcription API using Gemini 2.5 Flash
   app.post("/api/agent/transcribe-audio", async (req, res) => {
     try {
@@ -1034,6 +1063,15 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
           const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
           return sender === "agent" || sender === "model";
         })?.text || "";
+
+      const simpleOpsCommand =
+        normalizedMode === "operations" &&
+        lastUserMessage.trim().length > 0 &&
+        lastUserMessage.trim().length <= 120;
+
+      if (simpleOpsCommand) {
+        return res.json({ text: compactOperationsReply(buildImmediateOpsExecutionReply(lastUserMessage)) });
+      }
       
       // Structure chat messages in standard format, keeping only the last 6 messages for consistency and speed
       const contents = messages.slice(-6).map((m: any) => {
