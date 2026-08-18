@@ -985,6 +985,9 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
         if (normalizedMode === "operations" && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
           replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage));
         }
+        if (normalizedMode === "operations" && (replyText.length < 80 || /->\s*$/.test(replyText) || replyText.endsWith(":"))) {
+          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage));
+        }
         return res.json({ text: replyText });
       } catch (geminiError) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
