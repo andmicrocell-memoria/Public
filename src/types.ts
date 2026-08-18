@@ -30,6 +30,7 @@ export interface BusinessConfig {
   whatsappVerifyToken?: string;
   chatwootUrl?: string;
   chatwootApiAccessToken?: string;
+  aiRuntimeMode?: 'operations_internal' | 'customer_support';
   pricingTable?: PricingItem[];
   mutedPhones?: string[];
 }

@@ -322,6 +322,7 @@ export default function App() {
     testimonials: defaultTestimonialList,
     autoRespondWhatsApp: true,
     autoRespondReviews: true,
+    aiRuntimeMode: "operations_internal",
     pricingTable: defaultPricingTableList,
     mutedPhones: []
   };
@@ -481,6 +482,7 @@ export default function App() {
   const [selectedTagFilter, setSelectedTagFilter] = useState<string>("all");
   const [showAttachmentMenu, setShowAttachmentMenu] = useState<boolean>(false);
   const [showTagMenu, setShowTagMenu] = useState<boolean>(false);
+  const isCustomerSupportRuntime = config.aiRuntimeMode === "customer_support";
 
   // Sound chime synthesizer using standard Web Audio API (cross-browser, lightweight, zero assets needed)
   const playNotificationSound = () => {
@@ -2860,6 +2862,12 @@ export default function App() {
                 IA: {config.autoRespondWhatsApp ? "Autônoma" : "Copiloto"}
               </span>
             </div>
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border ${isCustomerSupportRuntime ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
+              <Shield className={`w-3.5 h-3.5 ${isCustomerSupportRuntime ? 'text-emerald-400' : 'text-amber-400'}`} />
+              <span className={`font-medium ${isCustomerSupportRuntime ? 'text-emerald-300' : 'text-amber-300'}`}>
+                Modo IA: {isCustomerSupportRuntime ? "Atendimento" : "Interno"}
+              </span>
+            </div>
             <button
               onClick={() => {
                 setIsMobileChatOnly(true);
@@ -3604,19 +3612,58 @@ export default function App() {
                   <div className="space-y-6" id="integration-forms">
                     {/* Chatwoot Config */}
                     <div className="space-y-4">
+                      <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800/70 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">Modo de Runtime da IA</h4>
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              Defina se a IA fica apenas para operação interna ou se pode atender clientes no Chatwoot.
+                            </p>
+                          </div>
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${isCustomerSupportRuntime ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-300'}`}>
+                            {isCustomerSupportRuntime ? "ATENDIMENTO AO CLIENTE" : "OPERAÇÃO INTERNA"}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <button
+                            onClick={() => handleSaveConfig({ aiRuntimeMode: "operations_internal" })}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${!isCustomerSupportRuntime ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'}`}
+                          >
+                            <p className="text-xs font-bold">IA Interna (Recomendado)</p>
+                            <p className="text-[11px] mt-1 opacity-80">Cria, configura e propõe soluções. Não responde cliente no Chatwoot.</p>
+                          </button>
+
+                          <button
+                            onClick={() => handleSaveConfig({ aiRuntimeMode: "customer_support" })}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${isCustomerSupportRuntime ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200' : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'}`}
+                          >
+                            <p className="text-xs font-bold">IA Atendimento (Chatwoot)</p>
+                            <p className="text-[11px] mt-1 opacity-80">Permite respostas automáticas para clientes via webhook do Chatwoot.</p>
+                          </button>
+                        </div>
+                      </div>
+
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">Configurações de Conexão</h4>
                         <div className="flex items-center gap-2" id="toggle-whatsapp-integration">
                           <span className="text-[10px] font-mono text-slate-400">Responder Automaticamente</span>
                           <button
                             onClick={() => handleSaveConfig({ autoRespondWhatsApp: !config.autoRespondWhatsApp })}
-                            className={`w-10 h-5.5 rounded-full p-0.5 transition-colors cursor-pointer ${config.autoRespondWhatsApp ? 'bg-indigo-600' : 'bg-slate-800'}`}
+                            className={`w-10 h-5.5 rounded-full p-0.5 transition-colors ${isCustomerSupportRuntime ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'} ${config.autoRespondWhatsApp ? 'bg-indigo-600' : 'bg-slate-800'}`}
+                            disabled={!isCustomerSupportRuntime}
                             id="btn-toggle-auto-whatsapp-int"
                           >
                             <div className={`w-4.5 h-4.5 rounded-full bg-white transition-transform ${config.autoRespondWhatsApp ? 'translate-x-4.5' : ''}`}></div>
                           </button>
                         </div>
                       </div>
+
+                      {!isCustomerSupportRuntime && (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
+                          O atendimento automático está bloqueado porque a IA está em modo interno. Troque para IA Atendimento para liberar respostas no Chatwoot.
+                        </div>
+                      )}
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="chatwoot-form">
                         <div id="fld-chatwoot-url" className="md:col-span-2">
