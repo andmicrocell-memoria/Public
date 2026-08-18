@@ -199,6 +199,9 @@ try {
 }
 async function getFirebaseConfig() {
   const localConfig = loadStoredConfig() || {};
+  const normalizeRuntimeMode = (value) => {
+    return value === "customer_support" ? "customer_support" : "operations_internal";
+  };
   if (db) {
     try {
       const configDocRef = (0, import_firestore.doc)(db, "config", "business");
@@ -209,21 +212,29 @@ async function getFirebaseConfig() {
           ...localConfig,
           ...firestoreData,
           chatwootApiAccessToken: (firestoreData.chatwootApiAccessToken || localConfig.chatwootApiAccessToken || "Q1DpLpBXSGYWVP7VGunkEkwL").trim(),
-          chatwootUrl: (firestoreData.chatwootUrl || localConfig.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim()
+          chatwootUrl: (firestoreData.chatwootUrl || localConfig.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim(),
+          aiRuntimeMode: normalizeRuntimeMode(firestoreData.aiRuntimeMode || localConfig.aiRuntimeMode)
         };
       }
     } catch (e) {
       console.error("Error reading config from Firestore:", e.message);
     }
   }
-  return localConfig;
+  return {
+    ...localConfig,
+    aiRuntimeMode: normalizeRuntimeMode(localConfig.aiRuntimeMode)
+  };
 }
 async function saveFirebaseConfig(config) {
-  saveStoredConfig(config);
+  const normalizedConfig = {
+    ...config || {},
+    aiRuntimeMode: config?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal"
+  };
+  saveStoredConfig(normalizedConfig);
   if (db) {
     try {
       const configDocRef = (0, import_firestore.doc)(db, "config", "business");
-      await (0, import_firestore.setDoc)(configDocRef, config);
+      await (0, import_firestore.setDoc)(configDocRef, normalizedConfig);
       console.log("Config saved to Firestore successfully!");
     } catch (e) {
       console.error("Error saving config to Firestore:", e.message);
@@ -1016,7 +1027,9 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
   app.post("/api/agent/chat", async (req, res) => {
     try {
       const { config, messages, mode } = req.body;
-      const normalizedMode = mode === "operations" ? "operations" : "customer_support";
+      const runtimeMode = config?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal";
+      const requestedMode = mode === "operations" ? "operations" : "customer_support";
+      const normalizedMode = runtimeMode === "operations_internal" ? "operations" : requestedMode;
       if (!config) {
         return res.status(400).json({ error: "Configura\xE7\xE3o do agente ausente." });
       }
@@ -1923,6 +1936,12 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
         if (storedConfig.autoRespondWhatsApp !== true) {
           addWebhookLog("system", `Mensagem do Chatwoot recebida (Rob\xF4 Desativado)`, `O rob\xF4 recebeu a mensagem de ${customerName}, mas n\xE3o respondeu porque o bot\xE3o "Responder Automaticamente" est\xE1 desativado nas configura\xE7\xF5es.`);
           console.log("[Chatwoot Webhook] Responder Automaticamente est\xE1 desativado. Ignorando processamento.");
+          return;
+        }
+        const runtimeMode = storedConfig?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal";
+        if (runtimeMode !== "customer_support") {
+          addWebhookLog("system", `Mensagem do Chatwoot recebida (Modo Interno da IA)`, `A IA est\xE1 em modo interno (opera\xE7\xF5es) e n\xE3o responder\xE1 clientes at\xE9 ativar o modo de atendimento.`);
+          console.log("[Chatwoot Webhook] Runtime mode is operations_internal. Skipping customer auto-reply.");
           return;
         }
         const mutedPhones = storedConfig.mutedPhones || [];
