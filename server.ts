@@ -903,10 +903,31 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
   10. Em melhorias de site, incluir pelo menos 1 ganho técnico e 1 ganho comercial.
   11. Limite de tamanho: no máximo 6 linhas curtas, sem markdown e sem textão.
   12. Finalize com uma única próxima ação objetiva.
+  13. Comandos de estilo (quando o usuário começar a mensagem com):
+    - @rapido: resposta ultra curta e direta (3 linhas).
+    - @executor: resposta objetiva com execução prática (5 linhas).
+    - @detalhado: resposta completa e estruturada (até 8 linhas).
   `;
     };
 
-    const compactOperationsReply = (rawText: string) => {
+    type OpsStyle = "rapido" | "executor" | "detalhado";
+
+    const detectOpsStyle = (rawText: string): { style: OpsStyle; cleanText: string } => {
+      const text = (rawText || "").trim();
+      const lower = text.toLowerCase();
+      if (lower.startsWith("@rapido")) {
+        return { style: "rapido", cleanText: text.replace(/^@rapido\s*/i, "").trim() };
+      }
+      if (lower.startsWith("@detalhado")) {
+        return { style: "detalhado", cleanText: text.replace(/^@detalhado\s*/i, "").trim() };
+      }
+      if (lower.startsWith("@executor")) {
+        return { style: "executor", cleanText: text.replace(/^@executor\s*/i, "").trim() };
+      }
+      return { style: "executor", cleanText: text };
+    };
+
+    const compactOperationsReply = (rawText: string, style: OpsStyle = "executor") => {
       const cleaned = (rawText || "")
         .replace(/\*\*/g, "")
         .replace(/^\s*[-*]\s+/gm, "")
@@ -917,11 +938,13 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         return "Situação: solicitação recebida.\nAção Recomendada: me diga a tarefa em 1 frase para eu montar execução imediata.\nRisco: sem escopo, há retrabalho.\nPróximo Passo: enviar objetivo e prazo desejado.";
       }
 
+      const lineLimit = style === "rapido" ? 3 : style === "detalhado" ? 8 : 5;
+
       const condensed = cleaned
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean)
-        .slice(0, 8)
+        .slice(0, lineLimit)
         .join("\n");
 
       const safeText = condensed
@@ -929,7 +952,8 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         .replace(/cliente final/gi, "operação interna")
         .replace(/suporte ao cliente/gi, "suporte operacional");
 
-      return safeText.length > 900 ? `${safeText.slice(0, 900)}...` : safeText;
+      const maxChars = style === "rapido" ? 320 : style === "detalhado" ? 1100 : 700;
+      return safeText.length > maxChars ? `${safeText.slice(0, maxChars)}...` : safeText;
     };
 
     const isLoopLikeReply = (reply: string, lastAi: string, lastUser: string) => {
@@ -953,12 +977,18 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
       return startsGeneric || tooSimilar || tooUnrelated;
     };
 
-    const buildDirectOpsReply = (lastUserMessage: string) => {
+    const buildDirectOpsReply = (lastUserMessage: string, style: OpsStyle = "executor") => {
       const msg = (lastUserMessage || "").trim();
+      if (style === "rapido") {
+        return `Entendido. Vou executar ${msg || "essa tarefa"} agora.\nPassos: corrigir, testar e validar.\nPróximo passo: diga o resultado esperado em 1 frase.`;
+      }
+      if (style === "detalhado") {
+        return `Entendido. Vou tratar isso agora de forma operacional.\nO que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.\nPassos: validar contexto, executar ajuste, testar resultado ponta a ponta.\nValidação: confirmar comportamento esperado sem erro, sem loop e com resposta objetiva.\nRisco: sem validação completa, o problema pode voltar.\nPróximo passo: me diga ambiente e prioridade para eu detalhar a execução.`;
+      }
       return `Entendido. Vou tratar isso agora de forma operacional.\nO que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.\nPassos: validar contexto, executar ajuste, testar resultado.\nValidação: confirmar comportamento esperado sem erro e com resposta objetiva.\nPróximo passo: me diga apenas o resultado esperado em 1 frase.`;
     };
 
-    const buildImmediateOpsExecutionReply = (lastUserMessage: string) => {
+    const buildImmediateOpsExecutionReply = (lastUserMessage: string, style: OpsStyle = "executor") => {
       const q = (lastUserMessage || "").toLowerCase();
       const hasSite = q.includes("site");
       const hasBot = q.includes("robo") || q.includes("bot");
@@ -976,13 +1006,30 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         hasGemini ? "gemini" : ""
       ].filter(Boolean).join(", ") || "operacao geral";
 
-      const exec = [
+      const execRapido = [
+        `Entendido. Foco em ${foco}.`,
+        "Acao agora: validar origem do erro e corrigir.",
+        "Proximo passo: confirme prioridade (rapido/medio/completo)."
+      ].join("\n");
+
+      const execExecutor = [
         `Entendido. Vou executar com foco em ${foco}.`,
         "Acao agora: validar logs, autenticacao e fluxo ponta a ponta.",
         "Passos: 1) reproduzir, 2) corrigir origem, 3) testar novamente.",
         "Validacao: sem erro, resposta objetiva e fluxo estavel.",
         "Proximo passo: me diga prioridade (rapido, medio ou completo)."
       ].join("\n");
+
+      const execDetalhado = [
+        `Entendido. Vou executar com foco em ${foco}.`,
+        "Acao: auditar Meta API -> Chatwoot -> Backend -> Gemini para localizar falha raiz.",
+        "Execucao: validar token/webhook, revisar logs, corrigir regra/rota e retestar ponta a ponta.",
+        "Validacao: resposta sem loop, sem truncamento e com estabilidade no fluxo.",
+        "Risco: sem auditoria por camada, o erro reaparece em horarios de pico.",
+        "Proximo passo: informe prioridade e ambiente (producao ou teste)."
+      ].join("\n");
+
+      const exec = style === "rapido" ? execRapido : style === "detalhado" ? execDetalhado : execExecutor;
 
       return exec;
     };
@@ -1056,7 +1103,10 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
           ? buildOperationsSystemInstruction(config)
           : buildSystemInstruction(config);
 
-      const lastUserMessage = messages[messages.length - 1]?.text || "";
+      const rawLastUserMessage = messages[messages.length - 1]?.text || "";
+      const opsStyleConfig = detectOpsStyle(rawLastUserMessage);
+      const lastUserMessage = opsStyleConfig.cleanText || rawLastUserMessage;
+      const opsStyle = opsStyleConfig.style;
       const lastAiMessage = [...messages]
         .reverse()
         .find((m: any) => {
@@ -1070,15 +1120,17 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         lastUserMessage.trim().length <= 120;
 
       if (simpleOpsCommand) {
-        return res.json({ text: compactOperationsReply(buildImmediateOpsExecutionReply(lastUserMessage)) });
+        return res.json({ text: compactOperationsReply(buildImmediateOpsExecutionReply(lastUserMessage, opsStyle), opsStyle) });
       }
       
       // Structure chat messages in standard format, keeping only the last 6 messages for consistency and speed
-      const contents = messages.slice(-6).map((m: any) => {
+      const contents = messages.slice(-6).map((m: any, idx: number, arr: any[]) => {
         const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
+        const isLastUser = idx === arr.length - 1 && (sender === "customer" || sender === "user");
+        const userText = isLastUser ? lastUserMessage : m.text;
         return {
           role: sender === "customer" || sender === "user" ? "user" : "model",
-          parts: [{ text: m.text }]
+          parts: [{ text: userText }]
         };
       });
 
@@ -1097,18 +1149,18 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         const baseReplyText = response.text || "Desculpe, não entendi a sua mensagem. Poderia repetir?";
         let replyText =
           normalizedMode === "operations"
-            ? compactOperationsReply(baseReplyText)
+            ? compactOperationsReply(baseReplyText, opsStyle)
             : baseReplyText;
 
         if (normalizedMode === "operations" && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
-          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage));
+          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage, opsStyle), opsStyle);
         }
 
         if (
           normalizedMode === "operations" &&
           (replyText.length < 80 || /->\s*$/.test(replyText) || replyText.endsWith(":"))
         ) {
-          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage));
+          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage, opsStyle), opsStyle);
         }
 
         return res.json({ text: replyText });
