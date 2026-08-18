@@ -868,16 +868,36 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
   10. Em melhorias de site, incluir pelo menos 1 ganho t\xE9cnico e 1 ganho comercial.
   11. Limite de tamanho: no m\xE1ximo 6 linhas curtas, sem markdown e sem text\xE3o.
   12. Finalize com uma \xFAnica pr\xF3xima a\xE7\xE3o objetiva.
+  13. Comandos de estilo (quando o usu\xE1rio come\xE7ar a mensagem com):
+    - @rapido: resposta ultra curta e direta (3 linhas).
+    - @executor: resposta objetiva com execu\xE7\xE3o pr\xE1tica (5 linhas).
+    - @detalhado: resposta completa e estruturada (at\xE9 8 linhas).
   `;
   };
-  const compactOperationsReply = (rawText) => {
+  const detectOpsStyle = (rawText) => {
+    const text = (rawText || "").trim();
+    const lower = text.toLowerCase();
+    if (lower.startsWith("@rapido")) {
+      return { style: "rapido", cleanText: text.replace(/^@rapido\s*/i, "").trim() };
+    }
+    if (lower.startsWith("@detalhado")) {
+      return { style: "detalhado", cleanText: text.replace(/^@detalhado\s*/i, "").trim() };
+    }
+    if (lower.startsWith("@executor")) {
+      return { style: "executor", cleanText: text.replace(/^@executor\s*/i, "").trim() };
+    }
+    return { style: "executor", cleanText: text };
+  };
+  const compactOperationsReply = (rawText, style = "executor") => {
     const cleaned = (rawText || "").replace(/\*\*/g, "").replace(/^\s*[-*]\s+/gm, "").replace(/\r/g, "").trim();
     if (!cleaned) {
       return "Situa\xE7\xE3o: solicita\xE7\xE3o recebida.\nA\xE7\xE3o Recomendada: me diga a tarefa em 1 frase para eu montar execu\xE7\xE3o imediata.\nRisco: sem escopo, h\xE1 retrabalho.\nPr\xF3ximo Passo: enviar objetivo e prazo desejado.";
     }
-    const condensed = cleaned.split("\n").map((line) => line.trim()).filter(Boolean).slice(0, 8).join("\n");
+    const lineLimit = style === "rapido" ? 3 : style === "detalhado" ? 8 : 5;
+    const condensed = cleaned.split("\n").map((line) => line.trim()).filter(Boolean).slice(0, lineLimit).join("\n");
     const safeText = condensed.replace(/atendimento ao cliente/gi, "opera\xE7\xE3o interna").replace(/cliente final/gi, "opera\xE7\xE3o interna").replace(/suporte ao cliente/gi, "suporte operacional");
-    return safeText.length > 900 ? `${safeText.slice(0, 900)}...` : safeText;
+    const maxChars = style === "rapido" ? 320 : style === "detalhado" ? 1100 : 700;
+    return safeText.length > maxChars ? `${safeText.slice(0, maxChars)}...` : safeText;
   };
   const isLoopLikeReply = (reply, lastAi, lastUser) => {
     const r = (reply || "").toLowerCase().trim();
@@ -896,15 +916,28 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
     const tooUnrelated = u.length > 8 && !r.includes(u.split(" ")[0]);
     return startsGeneric || tooSimilar || tooUnrelated;
   };
-  const buildDirectOpsReply = (lastUserMessage) => {
+  const buildDirectOpsReply = (lastUserMessage, style = "executor") => {
     const msg = (lastUserMessage || "").trim();
+    if (style === "rapido") {
+      return `Entendido. Vou executar ${msg || "essa tarefa"} agora.
+Passos: corrigir, testar e validar.
+Pr\xF3ximo passo: diga o resultado esperado em 1 frase.`;
+    }
+    if (style === "detalhado") {
+      return `Entendido. Vou tratar isso agora de forma operacional.
+O que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.
+Passos: validar contexto, executar ajuste, testar resultado ponta a ponta.
+Valida\xE7\xE3o: confirmar comportamento esperado sem erro, sem loop e com resposta objetiva.
+Risco: sem valida\xE7\xE3o completa, o problema pode voltar.
+Pr\xF3ximo passo: me diga ambiente e prioridade para eu detalhar a execu\xE7\xE3o.`;
+    }
     return `Entendido. Vou tratar isso agora de forma operacional.
 O que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.
 Passos: validar contexto, executar ajuste, testar resultado.
 Valida\xE7\xE3o: confirmar comportamento esperado sem erro e com resposta objetiva.
 Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
   };
-  const buildImmediateOpsExecutionReply = (lastUserMessage) => {
+  const buildImmediateOpsExecutionReply = (lastUserMessage, style = "executor") => {
     const q = (lastUserMessage || "").toLowerCase();
     const hasSite = q.includes("site");
     const hasBot = q.includes("robo") || q.includes("bot");
@@ -920,13 +953,27 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
       hasChatwoot ? "chatwoot" : "",
       hasGemini ? "gemini" : ""
     ].filter(Boolean).join(", ") || "operacao geral";
-    const exec = [
+    const execRapido = [
+      `Entendido. Foco em ${foco}.`,
+      "Acao agora: validar origem do erro e corrigir.",
+      "Proximo passo: confirme prioridade (rapido/medio/completo)."
+    ].join("\n");
+    const execExecutor = [
       `Entendido. Vou executar com foco em ${foco}.`,
       "Acao agora: validar logs, autenticacao e fluxo ponta a ponta.",
       "Passos: 1) reproduzir, 2) corrigir origem, 3) testar novamente.",
       "Validacao: sem erro, resposta objetiva e fluxo estavel.",
       "Proximo passo: me diga prioridade (rapido, medio ou completo)."
     ].join("\n");
+    const execDetalhado = [
+      `Entendido. Vou executar com foco em ${foco}.`,
+      "Acao: auditar Meta API -> Chatwoot -> Backend -> Gemini para localizar falha raiz.",
+      "Execucao: validar token/webhook, revisar logs, corrigir regra/rota e retestar ponta a ponta.",
+      "Validacao: resposta sem loop, sem truncamento e com estabilidade no fluxo.",
+      "Risco: sem auditoria por camada, o erro reaparece em horarios de pico.",
+      "Proximo passo: informe prioridade e ambiente (producao ou teste)."
+    ].join("\n");
+    const exec = style === "rapido" ? execRapido : style === "detalhado" ? execDetalhado : execExecutor;
     return exec;
   };
   app.post("/api/agent/transcribe-audio", async (req, res) => {
@@ -982,20 +1029,25 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
         }
       }
       const systemPrompt = normalizedMode === "operations" ? buildOperationsSystemInstruction(config) : buildSystemInstruction(config);
-      const lastUserMessage = messages[messages.length - 1]?.text || "";
+      const rawLastUserMessage = messages[messages.length - 1]?.text || "";
+      const opsStyleConfig = detectOpsStyle(rawLastUserMessage);
+      const lastUserMessage = opsStyleConfig.cleanText || rawLastUserMessage;
+      const opsStyle = opsStyleConfig.style;
       const lastAiMessage = [...messages].reverse().find((m) => {
         const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
         return sender === "agent" || sender === "model";
       })?.text || "";
       const simpleOpsCommand = normalizedMode === "operations" && lastUserMessage.trim().length > 0 && lastUserMessage.trim().length <= 120;
       if (simpleOpsCommand) {
-        return res.json({ text: compactOperationsReply(buildImmediateOpsExecutionReply(lastUserMessage)) });
+        return res.json({ text: compactOperationsReply(buildImmediateOpsExecutionReply(lastUserMessage, opsStyle), opsStyle) });
       }
-      const contents = messages.slice(-6).map((m) => {
+      const contents = messages.slice(-6).map((m, idx, arr) => {
         const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
+        const isLastUser = idx === arr.length - 1 && (sender === "customer" || sender === "user");
+        const userText = isLastUser ? lastUserMessage : m.text;
         return {
           role: sender === "customer" || sender === "user" ? "user" : "model",
-          parts: [{ text: m.text }]
+          parts: [{ text: userText }]
         };
       });
       try {
@@ -1010,12 +1062,12 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
           }
         });
         const baseReplyText = response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?";
-        let replyText = normalizedMode === "operations" ? compactOperationsReply(baseReplyText) : baseReplyText;
+        let replyText = normalizedMode === "operations" ? compactOperationsReply(baseReplyText, opsStyle) : baseReplyText;
         if (normalizedMode === "operations" && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
-          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage));
+          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage, opsStyle), opsStyle);
         }
         if (normalizedMode === "operations" && (replyText.length < 80 || /->\s*$/.test(replyText) || replyText.endsWith(":"))) {
-          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage));
+          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage, opsStyle), opsStyle);
         }
         return res.json({ text: replyText });
       } catch (geminiError) {
