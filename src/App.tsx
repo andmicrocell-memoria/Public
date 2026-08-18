@@ -2301,7 +2301,7 @@ export default function App() {
     );
   }
 
-  const useCompactWorkspace = true;
+  const useCompactWorkspace = false;
 
   if (useCompactWorkspace) {
     return (
