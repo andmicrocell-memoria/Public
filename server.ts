@@ -712,6 +712,36 @@ Tabela de Preços - Formatação e Backup (PCs e Notebooks):
 - Formatação com Backup de 600 GB a 1000 GB (1 TB): R$ 230,00
 `;
 
+  const buildOperationsSystemInstruction = (config: any) => {
+    const { name, category, phone, businessHours, address, specialOffers } = config || {};
+
+    return `Você é a Agente Operacional da empresa ${name || "AndMicrocell"}.
+
+Objetivo:
+- Atuar como assistente de operação, gestão e tomada de decisão.
+- Responder para o time interno (não para clientes finais).
+
+Contexto da empresa:
+- Segmento: ${category || "assistência técnica"}
+- Telefone principal: ${phone || "não informado"}
+- Horário comercial: ${businessHours || "não informado"}
+- Endereço: ${address || "não informado"}
+- Ofertas atuais: ${specialOffers || "não informado"}
+
+Diretrizes de resposta:
+1. Use Português do Brasil.
+2. Seja direta, objetiva e orientada à ação.
+3. Estruture sempre em 4 blocos curtos:
+   - Situação
+   - Ação Recomendada
+   - Risco
+   - Próximo Passo
+4. Quando faltar dado, diga exatamente o que está faltando e sugira como obter.
+5. Nunca responder como atendimento ao cliente nessa aba; o foco é operação interna.
+6. Evite textos longos e genéricos; priorize checklist e execução.
+`;
+  };
+
     const hardwareRulesText = `
 Regras Específicas de Preços de Computadores e Notebooks (MUITO IMPORTANTE):
 1. Manutenção Preventiva de Notebooks:
@@ -917,26 +947,33 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
   // Live WhatsApp Chat Simulation API
   app.post("/api/agent/chat", async (req, res) => {
     try {
-      const { config, messages } = req.body;
+      const { config, messages, mode } = req.body;
+      const normalizedMode = mode === "operations" ? "operations" : "customer_support";
 
       if (!config) {
         return res.status(400).json({ error: "Configuração do agente ausente." });
       }
 
-      const lastUserMessage = messages[messages.length - 1]?.text || "";
-      const historyLength = messages.length - 1;
-      const staticResponse = getStaticGreetingResponse(lastUserMessage, historyLength);
+      if (normalizedMode === "customer_support") {
+        const lastUserMessage = messages[messages.length - 1]?.text || "";
+        const historyLength = messages.length - 1;
+        const staticResponse = getStaticGreetingResponse(lastUserMessage, historyLength);
 
-      if (staticResponse) {
-        return res.json({ text: staticResponse });
+        if (staticResponse) {
+          return res.json({ text: staticResponse });
+        }
       }
 
-      const systemPrompt = buildSystemInstruction(config);
+      const systemPrompt =
+        normalizedMode === "operations"
+          ? buildOperationsSystemInstruction(config)
+          : buildSystemInstruction(config);
       
       // Structure chat messages in standard format, keeping only the last 6 messages for consistency and speed
       const contents = messages.slice(-6).map((m: any) => {
+        const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
         return {
-          role: m.sender === "customer" ? "user" : "model",
+          role: sender === "customer" || sender === "user" ? "user" : "model",
           parts: [{ text: m.text }]
         };
       });

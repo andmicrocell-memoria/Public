@@ -935,7 +935,7 @@ export default function App() {
         .slice(0, 20)
         .reverse()
         .map((m) => ({
-          sender: m.role === "user" ? "customer" : "agent",
+          sender: m.role === "user" ? "user" : "agent",
           text: m.text
         }));
 
@@ -944,6 +944,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           config,
+          mode: "operations",
           messages: payloadMessages
         })
       });
