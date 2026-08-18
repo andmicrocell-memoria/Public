@@ -2293,6 +2293,309 @@ export default function App() {
     );
   }
 
+  const useCompactWorkspace = true;
+
+  if (useCompactWorkspace) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col" id="app-root-compact">
+        <header className="border-b border-slate-800 bg-[#0b0f19]/80 backdrop-blur-md sticky top-0 z-40" id="header-compact">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5" id="header-compact-logo-group">
+              <div className="w-11 h-11 rounded-xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center" id="header-compact-badge">
+                <img
+                  src={logoUrl}
+                  alt="AndMicrocell Logo"
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div>
+                <h1 className="font-display font-extrabold text-xl tracking-tight text-white" id="header-compact-title">
+                  ZetaChat AI
+                </h1>
+                <p className="text-xs text-slate-400 font-medium" id="header-compact-subtitle">
+                  Workspace limpo e focado
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 max-w-7xl w-full mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8" id="workspace-main-compact">
+          <aside className="w-full lg:w-64 shrink-0 flex flex-col gap-6" id="workspace-sidebar-compact">
+            <div className="p-5 rounded-2xl bg-[#0b101d] border border-slate-800/60" id="sidebar-nav-card-compact">
+              <h3 className="text-slate-400 text-[10px] font-mono font-bold uppercase tracking-wider mb-3 px-2" id="nav-label-compact">Navegação</h3>
+              <nav className="flex flex-col gap-1.5" id="nav-group-compact">
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                    activeTab === 'dashboard'
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10'
+                      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                  }`}
+                  id="btn-nav-dashboard-compact"
+                >
+                  <Activity className="w-4 h-4" />
+                  <span>Painel Geral</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('agent')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                    activeTab === 'agent'
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10'
+                      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                  }`}
+                  id="btn-nav-agent-compact"
+                >
+                  <Bot className="w-4 h-4 text-emerald-400" />
+                  <span>Agente IA</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('blog')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                    activeTab === 'blog'
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10'
+                      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                  }`}
+                  id="btn-nav-blog-compact"
+                >
+                  <BookOpen className="w-4 h-4 text-indigo-400" />
+                  <span>Mini Site & Blog</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('integration')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                    activeTab === 'integration'
+                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/10'
+                      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                  }`}
+                  id="btn-nav-integration-compact"
+                >
+                  <Shield className="w-4 h-4 text-emerald-400" />
+                  <span>Integração Chatwoot</span>
+                </button>
+              </nav>
+            </div>
+          </aside>
+
+          <section className="flex-1 min-w-0" id="workspace-viewport-compact">
+            <AnimatePresence mode="wait" id="tab-animate-presence-compact">
+              {activeTab === 'dashboard' && (
+                <motion.div
+                  key="dashboard-tab-compact"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.2 }}
+                  className="p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 space-y-4"
+                  id="dashboard-tab-panel-compact"
+                >
+                  <h3 className="font-display font-semibold text-base text-white">Painel Geral</h3>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    Área simplificada temporariamente. Use a navegação ao lado para acessar Agente IA, Mini Site & Blog e Integração Chatwoot.
+                  </p>
+                </motion.div>
+              )}
+
+              {activeTab === 'agent' && (
+                <motion.div
+                  key="agent-tab-compact"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.2 }}
+                  className="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full"
+                  id="agent-tab-panel-compact"
+                >
+                  <div className="lg:col-span-2 p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 space-y-4" id="agent-chat-card-compact">
+                    <h3 className="font-display font-semibold text-base text-white flex items-center gap-2">
+                      <Bot className="w-5 h-5 text-emerald-400" />
+                      Central da Agente IA
+                    </h3>
+
+                    <div className="h-[360px] overflow-y-auto p-4 rounded-2xl bg-slate-950/40 border border-slate-800 space-y-3" id="agent-messages-list-compact">
+                      {agentMessages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`p-3 rounded-xl border text-sm leading-relaxed ${
+                            msg.role === "user"
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                              : msg.role === "ai"
+                              ? "bg-indigo-500/10 border-indigo-500/20 text-slate-100"
+                              : "bg-rose-500/10 border-rose-500/20 text-rose-300"
+                          }`}
+                        >
+                          <p>{msg.text}</p>
+                          <p className="text-[10px] mt-1 opacity-70 font-mono">{msg.timestamp}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-2" id="agent-input-row-compact">
+                      <input
+                        type="text"
+                        value={agentCommandInput}
+                        onChange={(e) => setAgentCommandInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleSendAgentCommand();
+                          }
+                        }}
+                        placeholder="Ex: Liste riscos operacionais e ações de hoje"
+                        className="flex-1 px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-emerald-500"
+                        id="input-agent-command-compact"
+                      />
+                      <button
+                        onClick={handleSendAgentCommand}
+                        disabled={isAgentSending || !agentCommandInput.trim()}
+                        className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+                        id="btn-send-agent-command-compact"
+                      >
+                        {isAgentSending ? "Enviando..." : "Enviar"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 space-y-3" id="agent-guides-card-compact">
+                    <h4 className="font-display font-semibold text-sm text-white">Comandos Rápidos</h4>
+                    {[
+                      "Resuma os incidentes críticos do dia e priorize ações.",
+                      "Monte um plano de atendimento para reduzir tempo de resposta no WhatsApp.",
+                      "Liste os maiores riscos da operação e a mitigação recomendada.",
+                      "Crie um plano de execução para as próximas 3 horas."
+                    ].map((cmd, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setAgentCommandInput(cmd)}
+                        className="w-full text-left p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 text-xs transition-colors cursor-pointer"
+                      >
+                        {cmd}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'blog' && (
+                <motion.div
+                  key="blog-tab-compact"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.2 }}
+                  className="w-full"
+                  id="blog-tab-panel-compact"
+                >
+                  <BlogAdmin
+                    config={config}
+                    onViewPublicSite={() => setIsViewingPublicSite(true)}
+                    addLog={addLog}
+                  />
+                </motion.div>
+              )}
+
+              {activeTab === 'integration' && (
+                <motion.div
+                  key="integration-tab-compact"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.2 }}
+                  className="p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 space-y-6"
+                  id="integration-tab-panel-compact"
+                >
+                  <div>
+                    <h3 className="font-display font-semibold text-base text-white flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-emerald-400" />
+                      Integração Chatwoot
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Painel reduzido para o essencial da integração.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-1.5">URL da Instância do Chatwoot</label>
+                      <input
+                        type="text"
+                        value={localChatwootUrl}
+                        onChange={(e) => setLocalChatwootUrl(e.target.value)}
+                        placeholder="Ex: https://atendimento.andmicrocell.com.br"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"
+                        id="input-chatwoot-url-compact"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-1.5">Token de Acesso (api_access_token)</label>
+                      <input
+                        type="password"
+                        value={localChatwootToken}
+                        onChange={(e) => setLocalChatwootToken(e.target.value)}
+                        placeholder="Insira o seu token"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"
+                        id="input-chatwoot-token-compact"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={handleSaveChatwootDetails}
+                        disabled={isSavingChatwoot}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                          isSavingChatwoot
+                            ? 'bg-slate-800 text-slate-500'
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                        }`}
+                        id="btn-save-chatwoot-details-compact"
+                      >
+                        {isSavingChatwoot ? "Salvando..." : "Salvar Configurações"}
+                      </button>
+
+                      <button
+                        onClick={handleTestChatwootConnection}
+                        disabled={isTestingChatwoot || !localChatwootUrl || !localChatwootToken}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                          isTestingChatwoot
+                            ? 'bg-slate-800 text-slate-500 border-transparent'
+                            : !localChatwootUrl || !localChatwootToken
+                            ? 'bg-slate-900 text-slate-600 border-slate-800 cursor-not-allowed'
+                            : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                        }`}
+                        id="btn-test-chatwoot-details-compact"
+                      >
+                        {isTestingChatwoot ? "Testando..." : "Testar Conexão"}
+                      </button>
+                    </div>
+
+                    {chatwootTestResult && (
+                      <div
+                        className={`p-3.5 rounded-xl text-xs border ${
+                          chatwootTestResult.success
+                            ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-400'
+                            : 'bg-rose-950/20 border-rose-500/30 text-rose-400'
+                        }`}
+                        id="chatwoot-test-result-compact"
+                      >
+                        <p className="font-semibold">{chatwootTestResult.success ? "Conexão Estabelecida" : "Erro de Conexão"}</p>
+                        <p className="mt-1">{chatwootTestResult.message}</p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col" id="app-root-container">
       {/* Dynamic Ambient Background Glows */}
