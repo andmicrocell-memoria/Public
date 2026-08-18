@@ -1020,14 +1020,6 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
       if (!config) {
         return res.status(400).json({ error: "Configura\xE7\xE3o do agente ausente." });
       }
-      if (normalizedMode === "customer_support") {
-        const lastUserMessage2 = messages[messages.length - 1]?.text || "";
-        const historyLength = messages.length - 1;
-        const staticResponse = getStaticGreetingResponse(lastUserMessage2, historyLength);
-        if (staticResponse) {
-          return res.json({ text: staticResponse });
-        }
-      }
       const systemPrompt = normalizedMode === "operations" ? buildOperationsSystemInstruction(config) : buildSystemInstruction(config);
       const rawLastUserMessage = messages[messages.length - 1]?.text || "";
       const opsStyleConfig = detectOpsStyle(rawLastUserMessage);
@@ -1037,10 +1029,6 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
         const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
         return sender === "agent" || sender === "model";
       })?.text || "";
-      const simpleOpsCommand = normalizedMode === "operations" && lastUserMessage.trim().length > 0 && lastUserMessage.trim().length <= 120;
-      if (simpleOpsCommand) {
-        return res.json({ text: compactOperationsReply(buildImmediateOpsExecutionReply(lastUserMessage, opsStyle), opsStyle) });
-      }
       const contents = messages.slice(-6).map((m, idx, arr) => {
         const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
         const isLastUser = idx === arr.length - 1 && (sender === "customer" || sender === "user");
@@ -1057,7 +1045,7 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
           contents,
           config: {
             systemInstruction: systemPrompt,
-            temperature: normalizedMode === "operations" ? 0.25 : 0.7,
+            temperature: normalizedMode === "operations" ? 0.55 : 0.75,
             maxOutputTokens: normalizedMode === "operations" ? 220 : 900
           }
         });
@@ -1073,45 +1061,16 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
       } catch (geminiError) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
         if (normalizedMode === "operations") {
-          const lastUserMessage3 = messages[messages.length - 1]?.text?.toLowerCase() || "";
-          const topics = [];
-          if (lastUserMessage3.includes("site")) topics.push("site");
-          if (lastUserMessage3.includes("chatwoot")) topics.push("chatwoot");
-          if (lastUserMessage3.includes("meta") || lastUserMessage3.includes("whatsapp")) topics.push("meta api");
-          if (lastUserMessage3.includes("gemini") || lastUserMessage3.includes("ia")) topics.push("gemini");
-          if (lastUserMessage3.includes("painel")) topics.push("painel");
-          if (lastUserMessage3.includes("robo") || lastUserMessage3.includes("bot")) topics.push("robo");
-          const foco = topics.length > 0 ? topics.join(", ") : "opera\xE7\xE3o geral";
-          const opsFallback = `Entendido. Foco atual: ${foco}.
-Vou agir assim: validar Meta API -> Chatwoot -> Backend -> Gemini, com prioridade em logs e autentica\xE7\xE3o.
-Risco: sem essa checagem, o problema volta em loop.
-Pr\xF3ximo passo: me diga a tarefa exata em 1 frase para eu devolver execu\xE7\xE3o imediata.`;
           return res.json({
-            text: opsFallback,
+            text: "Nao consegui gerar com Gemini agora. Verifique GEMINI_API_KEY e tente novamente em alguns segundos.",
             isSimulatedFallback: true,
-            apiKeyNotice: "Configure a GEMINI_API_KEY no painel Secrets para respostas mais avan\xE7adas e din\xE2micas."
+            apiKeyNotice: "Configure a GEMINI_API_KEY valida para habilitar respostas reais do Gemini neste painel."
           });
         }
-        const lastUserMessage2 = messages[messages.length - 1]?.text?.toLowerCase() || "";
-        let fallbackResponse = `Ol\xE1! Sou o assistente virtual da ${config.name}. Como posso ajudar?`;
-        if (lastUserMessage2.includes("horario") || lastUserMessage2.includes("hor\xE1rio") || lastUserMessage2.includes("abre") || lastUserMessage2.includes("fecha")) {
-          fallbackResponse = `Nosso hor\xE1rio de funcionamento \xE9: ${config.businessHours || "de segunda a sexta, das 9h \xE0s 18h"}. Ficamos muito felizes com o seu interesse!`;
-        } else if (lastUserMessage2.includes("endereco") || lastUserMessage2.includes("endere\xE7o") || lastUserMessage2.includes("onde") || lastUserMessage2.includes("localizacao") || lastUserMessage2.includes("localiza\xE7\xE3o")) {
-          fallbackResponse = config.address ? `N\xF3s estamos localizados em: ${config.address}. Venha nos visitar!` : `N\xF3s atuamos principalmente de forma digital ou com entregas diretas!`;
-        } else if (lastUserMessage2.includes("preco") || lastUserMessage2.includes("pre\xE7o") || lastUserMessage2.includes("quanto") || lastUserMessage2.includes("valor")) {
-          fallbackResponse = `Para valores e or\xE7amentos detalhados do nosso segmento de ${config.category}, fale com nossos especialistas! O que exatamente voc\xEA procura?`;
-        } else if (config.faqs && config.faqs.length > 0) {
-          const matchedFaq = config.faqs.find(
-            (f) => lastUserMessage2.includes(f.question.toLowerCase()) || f.question.toLowerCase().split(" ").some((word) => word.length > 4 && lastUserMessage2.includes(word))
-          );
-          if (matchedFaq) {
-            fallbackResponse = matchedFaq.answer;
-          }
-        }
         return res.json({
-          text: fallbackResponse,
+          text: "Gemini indisponivel no momento. Ajuste a chave e tente novamente para obter resposta real da IA.",
           isSimulatedFallback: true,
-          apiKeyNotice: "Configure a GEMINI_API_KEY no painel Secrets do AI Studio para obter respostas din\xE2micas em tempo real com IA!"
+          apiKeyNotice: "Defina GEMINI_API_KEY no ambiente do servidor para respostas reais do Gemini."
         });
       }
     } catch (err) {
