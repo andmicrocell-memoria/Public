@@ -862,6 +862,17 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
   4. Quando faltar dado, diga exatamente o que est\xE1 faltando e sugira como obter.
   5. Nunca responder como atendimento ao cliente nessa aba; o foco \xE9 opera\xE7\xE3o interna.
   6. Evite textos longos e gen\xE9ricos; priorize checklist e execu\xE7\xE3o.
+  7. Se o usu\xE1rio reportar erro, bug, falha, queda, lentid\xE3o, timeout ou problema no chat/painel:
+    - N\xC3O diga que "n\xE3o pode verificar" ou "n\xE3o tem capacidade".
+    - Assuma postura de suporte operacional t\xE9cnico e entregue triagem objetiva.
+    - Traga hip\xF3tese prov\xE1vel, verifica\xE7\xE3o imediata e a\xE7\xE3o corretiva de curto prazo.
+  8. Para incidentes t\xE9cnicos, mantenha os 4 blocos com foco pr\xE1tico:
+    - Situa\xE7\xE3o: resumo do sintoma reportado.
+    - A\xE7\xE3o Recomendada: passos execut\xE1veis agora (ordem de execu\xE7\xE3o).
+    - Risco: impacto se n\xE3o agir.
+    - Pr\xF3ximo Passo: confirma\xE7\xE3o objetiva do resultado esperado.
+  9. Evite encaminhar genericamente para TI/suporte sem antes sugerir passos concretos que o operador pode executar.
+  10. Sempre que poss\xEDvel, inclua um mini checklist de valida\xE7\xE3o (ex: recarregar sem cache, testar endpoint, confirmar deploy ativo, capturar mensagem exata do erro).
   `;
   };
   app.post("/api/agent/transcribe-audio", async (req, res) => {
