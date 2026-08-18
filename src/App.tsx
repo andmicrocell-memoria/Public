@@ -519,7 +519,7 @@ export default function App() {
   }, [soundNotificationActive]);
 
   // 3. UI State Managers
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'settings' | 'integration' | 'blog' | 'pricing'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'settings' | 'integration' | 'blog' | 'agent'>('dashboard');
   const [crmTab, setCrmTab] = useState<'profile' | 'ai_adjust'>('profile');
   const [quickFaqQ, setQuickFaqQ] = useState("");
   const [quickFaqA, setQuickFaqA] = useState("");
@@ -576,6 +576,16 @@ export default function App() {
   const [customReviewComment, setCustomReviewComment] = useState("");
   const [customReviewRating, setCustomReviewRating] = useState(5);
   const [showAddReviewForm, setShowAddReviewForm] = useState(false);
+  const [agentCommandInput, setAgentCommandInput] = useState("");
+  const [isAgentSending, setIsAgentSending] = useState(false);
+  const [agentMessages, setAgentMessages] = useState<Array<{ id: string; role: "user" | "ai" | "error"; text: string; timestamp: string }>>([
+    {
+      id: "agent-welcome",
+      role: "ai",
+      text: "Agente IA online. Envie um comando para suporte, técnico ou gestão.",
+      timestamp: new Date().toTimeString().substring(0, 5)
+    }
+  ]);
   
   // States for Pricing Table management
   const [pricingSearch, setPricingSearch] = useState("");
@@ -901,6 +911,68 @@ export default function App() {
       meta
     };
     setLogs(prev => [newLog, ...prev.slice(0, 29)]); // keep last 30 logs
+  };
+
+  const handleSendAgentCommand = async () => {
+    const command = agentCommandInput.trim();
+    if (!command || isAgentSending) return;
+
+    const userMsg = {
+      id: `agent-user-${Date.now()}`,
+      role: "user" as const,
+      text: command,
+      timestamp: new Date().toTimeString().substring(0, 5)
+    };
+
+    const pendingMessages = [userMsg, ...agentMessages];
+    setAgentMessages(pendingMessages);
+    setAgentCommandInput("");
+    setIsAgentSending(true);
+
+    try {
+      const payloadMessages = pendingMessages
+        .filter((m) => m.role !== "error")
+        .slice(0, 20)
+        .reverse()
+        .map((m) => ({
+          sender: m.role === "user" ? "customer" : "agent",
+          text: m.text
+        }));
+
+      const response = await fetch(getApiUrl("/api/agent/chat"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          config,
+          messages: payloadMessages
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Falha ao consultar IA");
+      }
+
+      const aiMsg = {
+        id: `agent-ai-${Date.now()}`,
+        role: "ai" as const,
+        text: data?.text || "Sem conteúdo de resposta da IA.",
+        timestamp: new Date().toTimeString().substring(0, 5)
+      };
+
+      setAgentMessages((prev) => [aiMsg, ...prev]);
+      addLog("system", "Comando executado na aba Agente IA", command);
+    } catch (error: any) {
+      const errMsg = {
+        id: `agent-err-${Date.now()}`,
+        role: "error" as const,
+        text: error?.message || "Erro ao consultar IA.",
+        timestamp: new Date().toTimeString().substring(0, 5)
+      };
+      setAgentMessages((prev) => [errMsg, ...prev]);
+    } finally {
+      setIsAgentSending(false);
+    }
   };
 
   // Helper to generate AI reply for a given session and message history
@@ -2328,17 +2400,17 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => setActiveTab('pricing')}
+                onClick={() => setActiveTab('agent')}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'pricing'
+                  activeTab === 'agent'
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10'
                     : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
                 }`}
-                id="btn-nav-pricing"
+                id="btn-nav-agent"
               >
-                <Briefcase className="w-4 h-4 text-emerald-400" />
+                <Bot className="w-4 h-4 text-emerald-400" />
                 <span className="flex items-center gap-1.5">
-                  Tabela de Preços
+                  Agente IA
                   <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">IA</span>
                 </span>
               </button>
@@ -3229,7 +3301,94 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'pricing' && (
+            {activeTab === 'agent' && (
+              <motion.div
+                key="agent-tab"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+                className="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full"
+                id="agent-tab-panel"
+              >
+                <div className="lg:col-span-2 p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 space-y-4" id="agent-chat-card">
+                  <div>
+                    <h3 className="font-display font-semibold text-base text-white flex items-center gap-2" id="agent-title">
+                      <Bot className="w-5 h-5 text-emerald-400" />
+                      Central da Agente IA
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1" id="agent-subtitle">
+                      Use esta área para enviar comandos estratégicos e operacionais para a IA da AndMicrocell.
+                    </p>
+                  </div>
+
+                  <div className="h-[420px] overflow-y-auto p-4 rounded-2xl bg-slate-950/40 border border-slate-800 space-y-3" id="agent-messages-list">
+                    {agentMessages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`p-3 rounded-xl border text-sm leading-relaxed ${
+                          msg.role === "user"
+                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                            : msg.role === "ai"
+                            ? "bg-indigo-500/10 border-indigo-500/20 text-slate-100"
+                            : "bg-rose-500/10 border-rose-500/20 text-rose-300"
+                        }`}
+                      >
+                        <p>{msg.text}</p>
+                        <p className="text-[10px] mt-1 opacity-70 font-mono">{msg.timestamp}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2" id="agent-input-row">
+                    <input
+                      type="text"
+                      value={agentCommandInput}
+                      onChange={(e) => setAgentCommandInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleSendAgentCommand();
+                        }
+                      }}
+                      placeholder="Ex: Crie um plano de atendimento para hoje com prioridades"
+                      className="flex-1 px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-emerald-500"
+                      id="input-agent-command"
+                    />
+                    <button
+                      onClick={handleSendAgentCommand}
+                      disabled={isAgentSending || !agentCommandInput.trim()}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+                      id="btn-send-agent-command"
+                    >
+                      {isAgentSending ? "Enviando..." : "Enviar"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-6 rounded-3xl bg-[#0b101d] border border-slate-800/60 space-y-4" id="agent-guides-card">
+                  <h4 className="font-display font-semibold text-sm text-white">Comandos Rápidos</h4>
+                  <div className="space-y-2">
+                    {[
+                      "Resuma os incidentes críticos do dia e priorize ações.",
+                      "Monte um plano de atendimento para reduzir tempo de resposta no WhatsApp.",
+                      "Liste os maiores riscos da operação e a mitigação recomendada.",
+                      "Crie uma resposta pronta para cliente com aparelho molhado."
+                    ].map((cmd, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setAgentCommandInput(cmd)}
+                        className="w-full text-left p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 text-xs transition-colors cursor-pointer"
+                      >
+                        {cmd}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {false && (
               <motion.div
                 key="pricing-tab"
                 initial={{ opacity: 0, y: 15 }}
