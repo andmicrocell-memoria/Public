@@ -152,6 +152,29 @@ function salvarConfiguracaoBotTool(args: any) {
   };
 }
 
+function alterarTelefoneSiteTool(args: any) {
+  const novoTelefone = String(args?.novoTelefone || "").trim();
+  if (!novoTelefone) {
+    throw new Error("novoTelefone é obrigatório.");
+  }
+
+  ensureConfigDir();
+  const siteConfigPath = path.join(configDir, "site_config.json");
+  const payload = {
+    telefone: novoTelefone,
+    modificadoEm: new Date().toISOString(),
+  };
+
+  fs.writeFileSync(siteConfigPath, JSON.stringify(payload, null, 2), "utf8");
+
+  return {
+    sucesso: true,
+    mensagem: `Telefone do site alterado para ${novoTelefone}!`,
+    arquivo: path.relative(process.cwd(), siteConfigPath).replaceAll("\\", "/"),
+    configuracao: payload,
+  };
+}
+
 const painelFunctionDeclarations = [
   {
     name: "salvarConfiguracaoBot",
@@ -166,10 +189,22 @@ const painelFunctionDeclarations = [
       required: ["nomeBot", "porta", "status"],
     },
   },
+  {
+    name: "alterarTelefoneSite",
+    description: "Atualiza o telefone do site no arquivo data/site_config.json.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        novoTelefone: { type: Type.STRING, description: "Novo telefone exibido no site." },
+      },
+      required: ["novoTelefone"],
+    },
+  },
 ];
 
 const painelToolHandlers: Record<string, (args: any) => any> = {
   salvarConfiguracaoBot: salvarConfiguracaoBotTool,
+  alterarTelefoneSite: alterarTelefoneSiteTool,
 };
 
 // Initialize Firebase Firestore safely
