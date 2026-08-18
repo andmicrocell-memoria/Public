@@ -937,8 +937,36 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
     - Backend (rotas e logs)
     - Gemini (chamada, prompt e fallback)
   19. Em melhorias de site, sempre sugerir no mínimo uma melhoria técnica e uma melhoria comercial.
-  20. Ao final de cada resposta operacional, inclua uma seção curta "Melhoria Extra Sugerida" com 1 ganho adicional de alto impacto.
+  20. Limite rígido de resposta: no máximo 8 linhas curtas.
+  21. Proibido usar markdown, negrito com **, listas longas ou blocos extensos.
+  22. Mantenha o foco em operação interna; não responder em tom de atendimento ao cliente.
   `;
+    };
+
+    const compactOperationsReply = (rawText: string) => {
+      const cleaned = (rawText || "")
+        .replace(/\*\*/g, "")
+        .replace(/^\s*[-*]\s+/gm, "")
+        .replace(/\r/g, "")
+        .trim();
+
+      if (!cleaned) {
+        return "Situação: solicitação recebida.\nAção Recomendada: me diga a tarefa em 1 frase para eu montar execução imediata.\nRisco: sem escopo, há retrabalho.\nPróximo Passo: enviar objetivo e prazo desejado.";
+      }
+
+      const condensed = cleaned
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, 8)
+        .join("\n");
+
+      const safeText = condensed
+        .replace(/atendimento ao cliente/gi, "operação interna")
+        .replace(/cliente final/gi, "operação interna")
+        .replace(/suporte ao cliente/gi, "suporte operacional");
+
+      return safeText.length > 900 ? `${safeText.slice(0, 900)}...` : safeText;
     };
 
   // Live Audio Transcription API using Gemini 2.5 Flash
@@ -1026,11 +1054,16 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
           contents,
           config: {
             systemInstruction: systemPrompt,
-            temperature: 0.7,
+            temperature: normalizedMode === "operations" ? 0.25 : 0.7,
+            maxOutputTokens: normalizedMode === "operations" ? 220 : 900,
           }
         });
 
-        const replyText = response.text || "Desculpe, não entendi a sua mensagem. Poderia repetir?";
+        const baseReplyText = response.text || "Desculpe, não entendi a sua mensagem. Poderia repetir?";
+        const replyText =
+          normalizedMode === "operations"
+            ? compactOperationsReply(baseReplyText)
+            : baseReplyText;
         return res.json({ text: replyText });
       } catch (geminiError: any) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
@@ -1047,7 +1080,7 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
 
           const foco = topics.length > 0 ? topics.join(", ") : "operação geral";
 
-          const opsFallback = `**Situação**\nPedido operacional identificado com foco em ${foco}.\n\n**Ação Recomendada**\n1. Definir objetivo de resultado (ex: reduzir falhas, aumentar conversão, acelerar resposta).\n2. Executar checklist por camada: Meta API -> Chatwoot -> Backend -> Gemini.\n3. Validar logs, autenticação, webhook, tempo de resposta e fallback.\n4. Aplicar melhoria rápida de alto impacto e medir resultado em seguida.\n\n**Risco**\nSem validação por camada, o fluxo pode parecer funcional mas manter falhas ocultas e retrabalho.\n\n**Próximo Passo**\nMe diga a tarefa exata em uma frase (ex: \"melhorar resposta do bot\" ou \"corrigir webhook chatwoot\") que eu devolvo o plano de execução imediato.\n\n**Melhoria Extra Sugerida**\nCriar rotina diária de 10 minutos com checklist de saúde do fluxo (entrada Meta API, entrega Chatwoot, resposta Gemini e logs de erro).`;
+          const opsFallback = `Situação: pedido operacional identificado com foco em ${foco}.\nAção Recomendada: validar Meta API -> Chatwoot -> Backend -> Gemini, começando por logs e autenticação.\nRisco: falhas ocultas geram retrabalho e queda de performance.\nPróximo Passo: me diga a tarefa exata em 1 frase para eu devolver execução imediata.\nMelhoria Extra Sugerida: checklist diário de 10 minutos para saúde do fluxo.`;
 
           return res.json({
             text: opsFallback,
