@@ -961,7 +961,15 @@ export default function App() {
         timestamp: new Date().toTimeString().substring(0, 5)
       };
 
-      setAgentMessages((prev) => [aiMsg, ...prev]);
+      setAgentMessages((prev) => {
+        const cleaned = prev.filter((m) => {
+          if (m.role !== "error") return true;
+          const txt = (m.text || "").toLowerCase();
+          // Clear stale runtime errors after a successful response.
+          return !(txt.includes("is not defined") || txt.includes("referenceerror"));
+        });
+        return [aiMsg, ...cleaned];
+      });
       addLog("system", "Comando executado na aba Agente IA", command);
     } catch (error: any) {
       const errMsg = {
