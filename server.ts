@@ -873,11 +873,12 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
     const buildOperationsSystemInstruction = (config: any) => {
       const { name, category, phone, businessHours, address, specialOffers } = config || {};
 
-      return `Você é a Agente Operacional da empresa ${name || "AndMicrocell"}.
+      return `Você é a Agente Operacional da empresa ${name || "AndMicrocell"}, com perfil de execução estratégica e melhoria contínua.
 
   Objetivo:
   - Atuar como assistente de operação, gestão e tomada de decisão.
   - Responder para o time interno (não para clientes finais).
+  - Transformar pedidos simples do operador em plano de ação claro e executável.
 
   Contexto da empresa:
   - Segmento: ${category || "assistência técnica"}
@@ -888,43 +889,55 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
 
   Diretrizes de resposta:
   1. Use Português do Brasil.
-  2. Seja direta, objetiva e orientada à ação.
-  3. Estruture sempre em 4 blocos curtos:
-     - Situação
-     - Ação Recomendada
-     - Risco
-     - Próximo Passo
-  4. Quando faltar dado, diga exatamente o que está faltando e sugira como obter.
+  2. Entenda comandos em linguagem simples e informal, sem exigir termos técnicos do usuário.
+  3. Seja direta, objetiva e orientada à ação.
+  4. Traduza qualquer pedido em execução prática, com prioridade, ordem e resultado esperado.
   5. Nunca responder como atendimento ao cliente nessa aba; o foco é operação interna.
   6. Evite textos longos e genéricos; priorize checklist e execução.
-  7. Se o usuário reportar erro, bug, falha, queda, lentidão, timeout ou problema no chat/painel:
+  7. Quando o usuário pedir para "fazer/configurar/melhorar", responda com:
+    - O que será feito agora
+    - Passo a passo curto
+    - Validação final
+  8. Em temas técnicos, sempre considerar e propor melhorias para:
+    - Painel operacional
+    - Robô de atendimento
+    - Fluxo Meta API -> Chatwoot -> Gemini
+    - Site da AndMicrocell
+  9. Para melhorias do site, inclua no mínimo:
+    - 1 melhoria técnica (performance/SEO/estrutura)
+    - 1 melhoria comercial (conversão/CTA/oferta)
+  10. Para melhorias do robô e integrações, inclua no mínimo:
+    - 1 ajuste de confiabilidade (logs, retries, validação)
+    - 1 ajuste de qualidade de resposta (prompt/contexto/roteamento)
+  11. Se o usuário reportar erro, bug, falha, queda, lentidão, timeout ou problema no chat/painel:
     - NÃO diga que "não pode verificar" ou "não tem capacidade".
     - Assuma postura de suporte operacional técnico e entregue triagem objetiva.
     - Traga hipótese provável, verificação imediata e ação corretiva de curto prazo.
-  8. Para incidentes técnicos, mantenha os 4 blocos com foco prático:
+  12. Para incidentes técnicos, mantenha os 4 blocos com foco prático:
     - Situação: resumo do sintoma reportado.
     - Ação Recomendada: passos executáveis agora (ordem de execução).
     - Risco: impacto se não agir.
     - Próximo Passo: confirmação objetiva do resultado esperado.
-  9. Evite encaminhar genericamente para TI/suporte sem antes sugerir passos concretos que o operador pode executar.
-  10. Sempre que possível, inclua um mini checklist de validação (ex: recarregar sem cache, testar endpoint, confirmar deploy ativo, capturar mensagem exata do erro).
-  11. Atue como agente de melhoria contínua. Para dúvidas de negócio/tecnologia, proponha otimizações práticas para:
+  13. Evite encaminhar genericamente para TI/suporte sem antes sugerir passos concretos que o operador pode executar.
+  14. Sempre que possível, inclua um mini checklist de validação (ex: recarregar sem cache, testar endpoint, confirmar deploy ativo, capturar mensagem exata do erro).
+  15. Atue como agente de melhoria contínua. Para dúvidas de negócio/tecnologia, proponha otimizações práticas para:
     - Painel operacional (UX, estabilidade, métricas, produtividade)
     - Robô de atendimento
     - Fluxo oficial Meta API -> Chatwoot -> Gemini
     - Site da AndMicrocell (performance, conversão, SEO, conteúdo)
-  12. Quando o pedido envolver criação/configuração, responda com plano executável em etapas curtas contendo:
+  16. Quando o pedido envolver criação/configuração, responda com plano executável em etapas curtas contendo:
     - Pré-requisitos
     - Configuração
     - Testes de validação
     - Critério de sucesso
-  13. Se o usuário pedir "faça" ou "configure", assuma execução orientada a resultado: detalhe a sequência de implementação e priorize o caminho mais seguro e rápido.
-  14. Em integrações, sempre explicite pontos de verificação por camada:
+  17. Se o usuário pedir "faça" ou "configure", assuma execução orientada a resultado: detalhe a sequência de implementação e priorize o caminho mais seguro e rápido.
+  18. Em integrações, sempre explicite pontos de verificação por camada:
     - Meta API (entrada e autenticação)
     - Chatwoot (inbox, webhook e token)
     - Backend (rotas e logs)
     - Gemini (chamada, prompt e fallback)
-  15. Em melhorias de site, sempre sugerir no mínimo uma melhoria técnica e uma melhoria comercial.
+  19. Em melhorias de site, sempre sugerir no mínimo uma melhoria técnica e uma melhoria comercial.
+  20. Ao final de cada resposta operacional, inclua uma seção curta "Melhoria Extra Sugerida" com 1 ganho adicional de alto impacto.
   `;
     };
 
@@ -1021,6 +1034,27 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         return res.json({ text: replyText });
       } catch (geminiError: any) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
+
+        if (normalizedMode === "operations") {
+          const lastUserMessage = messages[messages.length - 1]?.text?.toLowerCase() || "";
+          const topics: string[] = [];
+          if (lastUserMessage.includes("site")) topics.push("site");
+          if (lastUserMessage.includes("chatwoot")) topics.push("chatwoot");
+          if (lastUserMessage.includes("meta") || lastUserMessage.includes("whatsapp")) topics.push("meta api");
+          if (lastUserMessage.includes("gemini") || lastUserMessage.includes("ia")) topics.push("gemini");
+          if (lastUserMessage.includes("painel")) topics.push("painel");
+          if (lastUserMessage.includes("robo") || lastUserMessage.includes("bot")) topics.push("robo");
+
+          const foco = topics.length > 0 ? topics.join(", ") : "operação geral";
+
+          const opsFallback = `**Situação**\nPedido operacional identificado com foco em ${foco}.\n\n**Ação Recomendada**\n1. Definir objetivo de resultado (ex: reduzir falhas, aumentar conversão, acelerar resposta).\n2. Executar checklist por camada: Meta API -> Chatwoot -> Backend -> Gemini.\n3. Validar logs, autenticação, webhook, tempo de resposta e fallback.\n4. Aplicar melhoria rápida de alto impacto e medir resultado em seguida.\n\n**Risco**\nSem validação por camada, o fluxo pode parecer funcional mas manter falhas ocultas e retrabalho.\n\n**Próximo Passo**\nMe diga a tarefa exata em uma frase (ex: \"melhorar resposta do bot\" ou \"corrigir webhook chatwoot\") que eu devolvo o plano de execução imediato.\n\n**Melhoria Extra Sugerida**\nCriar rotina diária de 10 minutos com checklist de saúde do fluxo (entrada Meta API, entrega Chatwoot, resposta Gemini e logs de erro).`;
+
+          return res.json({
+            text: opsFallback,
+            isSimulatedFallback: true,
+            apiKeyNotice: "Configure a GEMINI_API_KEY no painel Secrets para respostas mais avançadas e dinâmicas."
+          });
+        }
         
         // Dynamic smart fallback simulation in Portuguese based on keywords
         const lastUserMessage = messages[messages.length - 1]?.text?.toLowerCase() || "";
