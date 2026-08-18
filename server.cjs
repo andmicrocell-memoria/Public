@@ -847,7 +847,7 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
 9. Responda sempre em Portugu\xEAs do Brasil.
 10. Encerramento Objetivo da Conversa: Quando o cliente se despedir, agradecer ("Obrigado", "Valeu", "Tudo certo", "Entendido", "Tchau", "Boa noite", etc.) ou der sinais claros de que a d\xFAvida foi resolvida e o atendimento se encerrou, responda de forma final, extremamente direta, amig\xE1vel e objetiva. NUNCA fa\xE7a novas perguntas redundantes ("Posso ajudar em algo mais?") ou tente prolongar a conversa desnecessariamente. Apenas agrade\xE7a, deseje um excelente dia/noite ou agende um hor\xE1rio para ele trazer o aparelho, e encerre por ali.`;
   };
-  const buildOperationsSystemInstruction = (config) => {
+  const buildOperationsSystemInstruction = (config, advancedMode = false) => {
     const { name, category, phone, businessHours, address, specialOffers } = config || {};
     return `Voc\xEA \xE9 a Agente Operacional da empresa ${name || "AndMicrocell"}, com perfil de execu\xE7\xE3o estrat\xE9gica e melhoria cont\xEDnua.
 
@@ -869,20 +869,14 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
   3. Converse de forma natural (como um operador experiente), sem respostas rob\xF3ticas ou repetitivas.
   4. Nunca responder como atendimento ao cliente; o foco \xE9 opera\xE7\xE3o interna.
   5. Evite loop: n\xE3o repetir frases de abertura como "Agente IA online" ou equivalentes.
-  6. Se a pergunta for curta (ex: "arruma isso", "melhora o robo"), devolva uma resposta curta com a\xE7\xE3o imediata.
-  7. Quando o usu\xE1rio pedir para fazer/configurar/melhorar, responda em 3 partes curtas:
-    - O que vou fazer agora
-    - Passos de execu\xE7\xE3o
-    - Como validar que deu certo
-  8. Para incidentes t\xE9cnicos, use 4 blocos curtos: Situa\xE7\xE3o, A\xE7\xE3o, Risco, Pr\xF3ximo passo.
-  9. Em integra\xE7\xF5es, considerar sempre as camadas Meta API -> Chatwoot -> Backend -> Gemini.
-  10. Em melhorias de site, incluir pelo menos 1 ganho t\xE9cnico e 1 ganho comercial.
-  11. Limite de tamanho: no m\xE1ximo 6 linhas curtas, sem markdown e sem text\xE3o.
-  12. Finalize com uma \xFAnica pr\xF3xima a\xE7\xE3o objetiva.
-  13. Comandos de estilo (quando o usu\xE1rio come\xE7ar a mensagem com):
+  6. Em integra\xE7\xF5es, considerar as camadas Meta API -> Chatwoot -> Backend -> Gemini.
+  7. Em melhorias de site, incluir pelo menos 1 ganho t\xE9cnico e 1 ganho comercial.
+  8. Finalize com uma pr\xF3xima a\xE7\xE3o objetiva.
+  9. Comandos de estilo (quando o usu\xE1rio come\xE7ar a mensagem com):
     - @rapido: resposta ultra curta e direta (3 linhas).
     - @executor: resposta objetiva com execu\xE7\xE3o pr\xE1tica (5 linhas).
     - @detalhado: resposta completa e estruturada (at\xE9 8 linhas).
+  10. ${advancedMode ? "Modo inteligente ativo: aprofunde diagn\xF3stico, proponha alternativas, trade-offs e plano em fases quando fizer sentido." : "Modo executor ativo: priorize a\xE7\xE3o imediata e clareza operacional."}
   `;
   };
   const detectOpsStyle = (rawText) => {
@@ -902,18 +896,17 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
   const compactOperationsReply = (rawText, style = "executor") => {
     const cleaned = (rawText || "").replace(/\*\*/g, "").replace(/^\s*[-*]\s+/gm, "").replace(/\r/g, "").trim();
     if (!cleaned) {
-      return "Situa\xE7\xE3o: solicita\xE7\xE3o recebida.\nA\xE7\xE3o Recomendada: me diga a tarefa em 1 frase para eu montar execu\xE7\xE3o imediata.\nRisco: sem escopo, h\xE1 retrabalho.\nPr\xF3ximo Passo: enviar objetivo e prazo desejado.";
+      return "Recebi sua solicita\xE7\xE3o. Descreva objetivo e contexto em 1 frase para eu te devolver um plano acion\xE1vel.";
     }
-    const lineLimit = style === "rapido" ? 3 : style === "detalhado" ? 8 : 5;
+    const lineLimit = style === "rapido" ? 5 : style === "detalhado" ? 14 : 9;
     const condensed = cleaned.split("\n").map((line) => line.trim()).filter(Boolean).slice(0, lineLimit).join("\n");
     const safeText = condensed.replace(/atendimento ao cliente/gi, "opera\xE7\xE3o interna").replace(/cliente final/gi, "opera\xE7\xE3o interna").replace(/suporte ao cliente/gi, "suporte operacional");
-    const maxChars = style === "rapido" ? 320 : style === "detalhado" ? 1100 : 700;
+    const maxChars = style === "rapido" ? 700 : style === "detalhado" ? 2600 : 1700;
     return safeText.length > maxChars ? `${safeText.slice(0, maxChars)}...` : safeText;
   };
   const isLoopLikeReply = (reply, lastAi, lastUser) => {
     const r = (reply || "").toLowerCase().trim();
     const a = (lastAi || "").toLowerCase().trim();
-    const u = (lastUser || "").toLowerCase().trim();
     if (!r) return true;
     const genericStarts = [
       "agente ia online",
@@ -923,30 +916,29 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
       "pedido operacional identificado"
     ];
     const startsGeneric = genericStarts.some((s) => r.startsWith(s));
-    const tooSimilar = a && (r === a || r.includes(a) || a.includes(r));
-    const tooUnrelated = u.length > 8 && !r.includes(u.split(" ")[0]);
-    return startsGeneric || tooSimilar || tooUnrelated;
+    const tooSimilar = a && (r === a || r.length > 40 && (r.includes(a) || a.includes(r)));
+    return startsGeneric || tooSimilar;
   };
   const buildDirectOpsReply = (lastUserMessage, style = "executor") => {
     const msg = (lastUserMessage || "").trim();
     if (style === "rapido") {
-      return `Entendido. Vou executar ${msg || "essa tarefa"} agora.
-Passos: corrigir, testar e validar.
-Pr\xF3ximo passo: diga o resultado esperado em 1 frase.`;
+      return `Plano r\xE1pido: vou atacar ${msg || "essa tarefa"} agora.
+Execu\xE7\xE3o: corrigir origem e validar ponta a ponta.
+Me diga o resultado final esperado em 1 frase.`;
     }
     if (style === "detalhado") {
-      return `Entendido. Vou tratar isso agora de forma operacional.
-O que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.
-Passos: validar contexto, executar ajuste, testar resultado ponta a ponta.
-Valida\xE7\xE3o: confirmar comportamento esperado sem erro, sem loop e com resposta objetiva.
-Risco: sem valida\xE7\xE3o completa, o problema pode voltar.
-Pr\xF3ximo passo: me diga ambiente e prioridade para eu detalhar a execu\xE7\xE3o.`;
+      return `Plano de execu\xE7\xE3o para ${msg || "essa tarefa"}:
+1) Diagn\xF3stico da causa raiz e hip\xF3teses.
+2) Corre\xE7\xE3o com menor risco de regress\xE3o.
+3) Valida\xE7\xE3o funcional ponta a ponta e monitoramento.
+Crit\xE9rio de sucesso: sem erro, sem loop e com resposta consistente.
+Me passe ambiente e prioridade para detalhar as a\xE7\xF5es por etapa.`;
     }
-    return `Entendido. Vou tratar isso agora de forma operacional.
-O que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.
-Passos: validar contexto, executar ajuste, testar resultado.
-Valida\xE7\xE3o: confirmar comportamento esperado sem erro e com resposta objetiva.
-Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
+    return `Execu\xE7\xE3o proposta para ${msg || "essa tarefa"}:
+- validar causa
+- aplicar ajuste
+- testar fluxo completo
+Se quiser, j\xE1 te devolvo a sequ\xEAncia exata de comandos e checklist.`;
   };
   const buildImmediateOpsExecutionReply = (lastUserMessage, style = "executor") => {
     const q = (lastUserMessage || "").toLowerCase();
@@ -1028,12 +1020,12 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
     try {
       const { config, messages, mode } = req.body;
       const runtimeMode = config?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal";
-      const requestedMode = mode === "operations" ? "operations" : "customer_support";
-      const normalizedMode = runtimeMode === "operations_internal" ? "operations" : requestedMode;
+      const requestedMode = mode === "operations_pro" ? "operations_pro" : mode === "operations" ? "operations" : "customer_support";
+      const normalizedMode = runtimeMode === "operations_internal" ? requestedMode === "operations_pro" ? "operations_pro" : "operations" : requestedMode;
       if (!config) {
         return res.status(400).json({ error: "Configura\xE7\xE3o do agente ausente." });
       }
-      const systemPrompt = normalizedMode === "operations" ? buildOperationsSystemInstruction(config) : buildSystemInstruction(config);
+      const systemPrompt = normalizedMode === "operations" || normalizedMode === "operations_pro" ? buildOperationsSystemInstruction(config, normalizedMode === "operations_pro") : buildSystemInstruction(config);
       const rawLastUserMessage = messages[messages.length - 1]?.text || "";
       const opsStyleConfig = detectOpsStyle(rawLastUserMessage);
       const lastUserMessage = opsStyleConfig.cleanText || rawLastUserMessage;
@@ -1058,22 +1050,22 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
           contents,
           config: {
             systemInstruction: systemPrompt,
-            temperature: normalizedMode === "operations" ? 0.55 : 0.75,
-            maxOutputTokens: normalizedMode === "operations" ? 220 : 900
+            temperature: normalizedMode === "operations_pro" ? 0.75 : normalizedMode === "operations" ? 0.55 : 0.75,
+            maxOutputTokens: normalizedMode === "operations_pro" ? 1200 : normalizedMode === "operations" ? 420 : 900
           }
         });
         const baseReplyText = response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?";
-        let replyText = normalizedMode === "operations" ? compactOperationsReply(baseReplyText, opsStyle) : baseReplyText;
-        if (normalizedMode === "operations" && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
+        let replyText = normalizedMode === "operations" || normalizedMode === "operations_pro" ? compactOperationsReply(baseReplyText, opsStyle) : baseReplyText;
+        if ((normalizedMode === "operations" || normalizedMode === "operations_pro") && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
           replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage, opsStyle), opsStyle);
         }
-        if (normalizedMode === "operations" && (replyText.length < 80 || /->\s*$/.test(replyText) || replyText.endsWith(":"))) {
+        if ((normalizedMode === "operations" || normalizedMode === "operations_pro") && (replyText.length < 80 || /->\s*$/.test(replyText) || replyText.endsWith(":"))) {
           replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage, opsStyle), opsStyle);
         }
         return res.json({ text: replyText });
       } catch (geminiError) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
-        if (normalizedMode === "operations") {
+        if (normalizedMode === "operations" || normalizedMode === "operations_pro") {
           return res.json({
             text: "Nao consegui gerar com Gemini agora. Verifique GEMINI_API_KEY e tente novamente em alguns segundos.",
             isSimulatedFallback: true,
