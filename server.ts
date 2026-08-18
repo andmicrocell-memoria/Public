@@ -889,57 +889,20 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
 
   Diretrizes de resposta:
   1. Use Português do Brasil.
-  2. Entenda comandos em linguagem simples e informal, sem exigir termos técnicos do usuário.
-  3. Seja direta, objetiva e orientada à ação.
-  4. Traduza qualquer pedido em execução prática, com prioridade, ordem e resultado esperado.
-  5. Nunca responder como atendimento ao cliente nessa aba; o foco é operação interna.
-  6. Evite textos longos e genéricos; priorize checklist e execução.
-  7. Quando o usuário pedir para "fazer/configurar/melhorar", responda com:
-    - O que será feito agora
-    - Passo a passo curto
-    - Validação final
-  8. Em temas técnicos, sempre considerar e propor melhorias para:
-    - Painel operacional
-    - Robô de atendimento
-    - Fluxo Meta API -> Chatwoot -> Gemini
-    - Site da AndMicrocell
-  9. Para melhorias do site, inclua no mínimo:
-    - 1 melhoria técnica (performance/SEO/estrutura)
-    - 1 melhoria comercial (conversão/CTA/oferta)
-  10. Para melhorias do robô e integrações, inclua no mínimo:
-    - 1 ajuste de confiabilidade (logs, retries, validação)
-    - 1 ajuste de qualidade de resposta (prompt/contexto/roteamento)
-  11. Se o usuário reportar erro, bug, falha, queda, lentidão, timeout ou problema no chat/painel:
-    - NÃO diga que "não pode verificar" ou "não tem capacidade".
-    - Assuma postura de suporte operacional técnico e entregue triagem objetiva.
-    - Traga hipótese provável, verificação imediata e ação corretiva de curto prazo.
-  12. Para incidentes técnicos, mantenha os 4 blocos com foco prático:
-    - Situação: resumo do sintoma reportado.
-    - Ação Recomendada: passos executáveis agora (ordem de execução).
-    - Risco: impacto se não agir.
-    - Próximo Passo: confirmação objetiva do resultado esperado.
-  13. Evite encaminhar genericamente para TI/suporte sem antes sugerir passos concretos que o operador pode executar.
-  14. Sempre que possível, inclua um mini checklist de validação (ex: recarregar sem cache, testar endpoint, confirmar deploy ativo, capturar mensagem exata do erro).
-  15. Atue como agente de melhoria contínua. Para dúvidas de negócio/tecnologia, proponha otimizações práticas para:
-    - Painel operacional (UX, estabilidade, métricas, produtividade)
-    - Robô de atendimento
-    - Fluxo oficial Meta API -> Chatwoot -> Gemini
-    - Site da AndMicrocell (performance, conversão, SEO, conteúdo)
-  16. Quando o pedido envolver criação/configuração, responda com plano executável em etapas curtas contendo:
-    - Pré-requisitos
-    - Configuração
-    - Testes de validação
-    - Critério de sucesso
-  17. Se o usuário pedir "faça" ou "configure", assuma execução orientada a resultado: detalhe a sequência de implementação e priorize o caminho mais seguro e rápido.
-  18. Em integrações, sempre explicite pontos de verificação por camada:
-    - Meta API (entrada e autenticação)
-    - Chatwoot (inbox, webhook e token)
-    - Backend (rotas e logs)
-    - Gemini (chamada, prompt e fallback)
-  19. Em melhorias de site, sempre sugerir no mínimo uma melhoria técnica e uma melhoria comercial.
-  20. Limite rígido de resposta: no máximo 8 linhas curtas.
-  21. Proibido usar markdown, negrito com **, listas longas ou blocos extensos.
-  22. Mantenha o foco em operação interna; não responder em tom de atendimento ao cliente.
+  2. Entenda comandos em linguagem simples e informal, sem exigir termos técnicos.
+  3. Converse de forma natural (como um operador experiente), sem respostas robóticas ou repetitivas.
+  4. Nunca responder como atendimento ao cliente; o foco é operação interna.
+  5. Evite loop: não repetir frases de abertura como "Agente IA online" ou equivalentes.
+  6. Se a pergunta for curta (ex: "arruma isso", "melhora o robo"), devolva uma resposta curta com ação imediata.
+  7. Quando o usuário pedir para fazer/configurar/melhorar, responda em 3 partes curtas:
+    - O que vou fazer agora
+    - Passos de execução
+    - Como validar que deu certo
+  8. Para incidentes técnicos, use 4 blocos curtos: Situação, Ação, Risco, Próximo passo.
+  9. Em integrações, considerar sempre as camadas Meta API -> Chatwoot -> Backend -> Gemini.
+  10. Em melhorias de site, incluir pelo menos 1 ganho técnico e 1 ganho comercial.
+  11. Limite de tamanho: no máximo 6 linhas curtas, sem markdown e sem textão.
+  12. Finalize com uma única próxima ação objetiva.
   `;
     };
 
@@ -967,6 +930,32 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         .replace(/suporte ao cliente/gi, "suporte operacional");
 
       return safeText.length > 900 ? `${safeText.slice(0, 900)}...` : safeText;
+    };
+
+    const isLoopLikeReply = (reply: string, lastAi: string, lastUser: string) => {
+      const r = (reply || "").toLowerCase().trim();
+      const a = (lastAi || "").toLowerCase().trim();
+      const u = (lastUser || "").toLowerCase().trim();
+      if (!r) return true;
+
+      const genericStarts = [
+        "agente ia online",
+        "situação:",
+        "acao recomendada:",
+        "ação recomendada:",
+        "pedido operacional identificado"
+      ];
+
+      const startsGeneric = genericStarts.some((s) => r.startsWith(s));
+      const tooSimilar = a && (r === a || r.includes(a) || a.includes(r));
+      const tooUnrelated = u.length > 8 && !r.includes(u.split(" ")[0]);
+
+      return startsGeneric || tooSimilar || tooUnrelated;
+    };
+
+    const buildDirectOpsReply = (lastUserMessage: string) => {
+      const msg = (lastUserMessage || "").trim();
+      return `Entendido. Vou tratar isso agora de forma operacional.\nO que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.\nPassos: validar contexto, executar ajuste, testar resultado.\nValidação: confirmar comportamento esperado sem erro e com resposta objetiva.\nPróximo passo: me diga apenas o resultado esperado em 1 frase.`;
     };
 
   // Live Audio Transcription API using Gemini 2.5 Flash
@@ -1037,6 +1026,14 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         normalizedMode === "operations"
           ? buildOperationsSystemInstruction(config)
           : buildSystemInstruction(config);
+
+      const lastUserMessage = messages[messages.length - 1]?.text || "";
+      const lastAiMessage = [...messages]
+        .reverse()
+        .find((m: any) => {
+          const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
+          return sender === "agent" || sender === "model";
+        })?.text || "";
       
       // Structure chat messages in standard format, keeping only the last 6 messages for consistency and speed
       const contents = messages.slice(-6).map((m: any) => {
@@ -1060,10 +1057,15 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         });
 
         const baseReplyText = response.text || "Desculpe, não entendi a sua mensagem. Poderia repetir?";
-        const replyText =
+        let replyText =
           normalizedMode === "operations"
             ? compactOperationsReply(baseReplyText)
             : baseReplyText;
+
+        if (normalizedMode === "operations" && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
+          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage));
+        }
+
         return res.json({ text: replyText });
       } catch (geminiError: any) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
@@ -1080,7 +1082,7 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
 
           const foco = topics.length > 0 ? topics.join(", ") : "operação geral";
 
-          const opsFallback = `Situação: pedido operacional identificado com foco em ${foco}.\nAção Recomendada: validar Meta API -> Chatwoot -> Backend -> Gemini, começando por logs e autenticação.\nRisco: falhas ocultas geram retrabalho e queda de performance.\nPróximo Passo: me diga a tarefa exata em 1 frase para eu devolver execução imediata.\nMelhoria Extra Sugerida: checklist diário de 10 minutos para saúde do fluxo.`;
+          const opsFallback = `Entendido. Foco atual: ${foco}.\nVou agir assim: validar Meta API -> Chatwoot -> Backend -> Gemini, com prioridade em logs e autenticação.\nRisco: sem essa checagem, o problema volta em loop.\nPróximo passo: me diga a tarefa exata em 1 frase para eu devolver execução imediata.`;
 
           return res.json({
             text: opsFallback,
