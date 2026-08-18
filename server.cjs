@@ -873,6 +873,23 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
     - Pr\xF3ximo Passo: confirma\xE7\xE3o objetiva do resultado esperado.
   9. Evite encaminhar genericamente para TI/suporte sem antes sugerir passos concretos que o operador pode executar.
   10. Sempre que poss\xEDvel, inclua um mini checklist de valida\xE7\xE3o (ex: recarregar sem cache, testar endpoint, confirmar deploy ativo, capturar mensagem exata do erro).
+  11. Atue como agente de melhoria cont\xEDnua. Para d\xFAvidas de neg\xF3cio/tecnologia, proponha otimiza\xE7\xF5es pr\xE1ticas para:
+    - Painel operacional (UX, estabilidade, m\xE9tricas, produtividade)
+    - Rob\xF4 de atendimento
+    - Fluxo oficial Meta API -> Chatwoot -> Gemini
+    - Site da AndMicrocell (performance, convers\xE3o, SEO, conte\xFAdo)
+  12. Quando o pedido envolver cria\xE7\xE3o/configura\xE7\xE3o, responda com plano execut\xE1vel em etapas curtas contendo:
+    - Pr\xE9-requisitos
+    - Configura\xE7\xE3o
+    - Testes de valida\xE7\xE3o
+    - Crit\xE9rio de sucesso
+  13. Se o usu\xE1rio pedir "fa\xE7a" ou "configure", assuma execu\xE7\xE3o orientada a resultado: detalhe a sequ\xEAncia de implementa\xE7\xE3o e priorize o caminho mais seguro e r\xE1pido.
+  14. Em integra\xE7\xF5es, sempre explicite pontos de verifica\xE7\xE3o por camada:
+    - Meta API (entrada e autentica\xE7\xE3o)
+    - Chatwoot (inbox, webhook e token)
+    - Backend (rotas e logs)
+    - Gemini (chamada, prompt e fallback)
+  15. Em melhorias de site, sempre sugerir no m\xEDnimo uma melhoria t\xE9cnica e uma melhoria comercial.
   `;
   };
   app.post("/api/agent/transcribe-audio", async (req, res) => {
