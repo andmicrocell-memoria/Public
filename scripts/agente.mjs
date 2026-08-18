@@ -136,8 +136,13 @@ async function runAgent(userPrompt) {
             contents,
             config: {
                 systemInstruction:
-                    'Voce e a Central da Agente IA da AndMicrocell. Sua principal funcao e EXECUTAR a criacao e configuracao de robos e sites usando as ferramentas (tools) disponiveis. Quando o usuario pedir para criar, configurar ou alterar um robo ou site, voce NUNCA deve dizer que nao consegue. Em vez disso, chame a funcao correspondente imediatamente.',
+                    'Você é a Central de Execução da AndMicrocell. SUA REGRA Nº 1: NUNCA explique como programar, NUNCA dê tutoriais e NUNCA dê respostas teóricas. Sempre que o usuário pedir para criar, alterar, configurar robôs, sites ou sistemas, CHAME A FUNÇÃO (tool) imediatamente sem dar explicações longas. Se existir uma ferramenta para a ação, execute-a. Não seja um consultor, seja um executor.',
                 tools: [{ functionDeclarations }],
+                toolConfig: {
+                    functionCallingConfig: {
+                        mode: 'AUTO',
+                    },
+                },
             },
         });
 
