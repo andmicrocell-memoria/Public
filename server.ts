@@ -1146,6 +1146,50 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
     }
   });
 
+  // Simple panel chat route: receives { mensagem } and returns { resposta }
+  app.post("/api/chat", async (req, res) => {
+    try {
+      const mensagem = String(req.body?.mensagem || "").trim();
+      if (!mensagem) {
+        return res.status(400).json({ erro: "Mensagem ausente." });
+      }
+
+      const client = getGeminiClient();
+      const response = await client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: mensagem,
+        config: {
+          systemInstruction: "Você é um executor do painel. Sempre use as ferramentas para criar ou alterar robôs e sites. Não dê explicações teóricas.",
+          tools: [{ functionDeclarations: painelFunctionDeclarations }],
+          toolConfig: {
+            functionCallingConfig: {
+              mode: FunctionCallingConfigMode.AUTO,
+            },
+          },
+        },
+      });
+
+      const functionCalls = response.functionCalls || [];
+      if (functionCalls.length > 0) {
+        const call = functionCalls[0];
+        const handler = painelToolHandlers[call.name || ""];
+        if (!handler) {
+          return res.json({ resposta: `[AÇÃO NÃO EXECUTADA]: ferramenta '${call.name}' não implementada.` });
+        }
+
+        const resultado = handler(call.args || {});
+        const mensagemResultado = resultado?.sucesso
+          ? resultado?.mensagem || `Arquivo gerado em ${resultado?.arquivo || "data/"}`
+          : "Falha ao executar a ação solicitada.";
+        return res.json({ resposta: `[AÇÃO EXECUTADA]: ${mensagemResultado}` });
+      }
+
+      return res.json({ resposta: response.text || "Sem resposta textual." });
+    } catch (error: any) {
+      return res.status(500).json({ erro: error?.message || "Erro interno no servidor." });
+    }
+  });
+
   // Live WhatsApp Chat Simulation API
   app.post("/api/agent/chat", async (req, res) => {
     try {
