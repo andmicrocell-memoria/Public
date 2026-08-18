@@ -904,6 +904,31 @@ Passos: validar contexto, executar ajuste, testar resultado.
 Valida\xE7\xE3o: confirmar comportamento esperado sem erro e com resposta objetiva.
 Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
   };
+  const buildImmediateOpsExecutionReply = (lastUserMessage) => {
+    const q = (lastUserMessage || "").toLowerCase();
+    const hasSite = q.includes("site");
+    const hasBot = q.includes("robo") || q.includes("bot");
+    const hasMeta = q.includes("meta") || q.includes("whatsapp");
+    const hasChatwoot = q.includes("chatwoot");
+    const hasGemini = q.includes("gemini") || q.includes("ia");
+    const hasPanel = q.includes("painel");
+    const foco = [
+      hasPanel ? "painel" : "",
+      hasSite ? "site" : "",
+      hasBot ? "robo" : "",
+      hasMeta ? "meta api" : "",
+      hasChatwoot ? "chatwoot" : "",
+      hasGemini ? "gemini" : ""
+    ].filter(Boolean).join(", ") || "operacao geral";
+    const exec = [
+      `Entendido. Vou executar com foco em ${foco}.`,
+      "Acao agora: validar logs, autenticacao e fluxo ponta a ponta.",
+      "Passos: 1) reproduzir, 2) corrigir origem, 3) testar novamente.",
+      "Validacao: sem erro, resposta objetiva e fluxo estavel.",
+      "Proximo passo: me diga prioridade (rapido, medio ou completo)."
+    ].join("\n");
+    return exec;
+  };
   app.post("/api/agent/transcribe-audio", async (req, res) => {
     try {
       const { audioBase64, mimeType = "audio/webm" } = req.body;
@@ -962,6 +987,10 @@ Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
         const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
         return sender === "agent" || sender === "model";
       })?.text || "";
+      const simpleOpsCommand = normalizedMode === "operations" && lastUserMessage.trim().length > 0 && lastUserMessage.trim().length <= 120;
+      if (simpleOpsCommand) {
+        return res.json({ text: compactOperationsReply(buildImmediateOpsExecutionReply(lastUserMessage)) });
+      }
       const contents = messages.slice(-6).map((m) => {
         const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
         return {
