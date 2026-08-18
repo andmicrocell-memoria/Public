@@ -524,18 +524,18 @@ export default function App() {
   const [quickFaqQ, setQuickFaqQ] = useState("");
   const [quickFaqA, setQuickFaqA] = useState("");
   const [isViewingPublicSite, setIsViewingPublicSite] = useState(() => {
-    const isAiStudio = window.location.hostname.includes("run.app") || 
-                       window.location.hostname.includes("localhost") || 
-                       window.location.hostname.includes("127.0.0.1") ||
-                       window.location.hostname.includes("stackblitz");
+    const isLocalEnvironment = window.location.hostname.includes("localhost") ||
+      window.location.hostname.includes("127.0.0.1");
+    const isAdminHostname = window.location.hostname.startsWith("app.") ||
+      window.location.hostname.startsWith("painel.");
 
-    // Permite que o subdomínio 'app.andmicrocell.com.br' (ou qualquer 'app.') acesse o painel administrativo
-    if (window.location.hostname.startsWith("app.")) {
+    // Permite que os subdomínios administrativos acessem sempre o painel.
+    if (isAdminHostname) {
       return false;
     }
 
-    // De maneira nenhuma exibe o painel em outros domínios customizados (como www.andmicrocell.com.br ou andmicrocell.com.br)
-    if (!isAiStudio) {
+    // Em domínios públicos fora do subdomínio administrativo, prioriza o site público.
+    if (!isLocalEnvironment) {
       return true;
     }
 
@@ -1859,13 +1859,161 @@ export default function App() {
 
   const selectedSession = combinedSessions.find(s => s.id === selectedSessionId) || displayedSessions[0] || combinedSessions[0];
 
+  const sanitizeExportFileName = (value: string) => {
+    return value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9-_]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase() || "historico";
+  };
+
+  const buildMobileHistoryRows = (sourceSessions: ChatSession[]) => {
+    return sourceSessions.flatMap((session) => {
+      const origin = session.isReal ? "Real" : "Teste";
+      const tags = (session.tags || []).join(", ");
+      const notes = session.notes || "";
+
+      if (!session.messages.length) {
+        return [{
+          conversa: session.customerName,
+          telefone: session.customerPhone,
+          origem: origin,
+          remetente: "Sistema",
+          horario: "-",
+          tipo: "Sem mensagens",
+          mensagem: session.lastMessage || "Sem histórico disponível.",
+          tags,
+          observacoes: notes,
+        }];
+      }
+
+      return session.messages.map((message) => ({
+        conversa: session.customerName,
+        telefone: session.customerPhone,
+        origem: origin,
+        remetente: message.sender === "customer" ? "Cliente" : message.sender === "agent" ? "Agente" : "Sistema",
+        horario: message.timestamp || "-",
+        tipo: message.mediaType || "texto",
+        mensagem: message.text || "",
+        tags,
+        observacoes: notes,
+      }));
+    });
+  };
+
+  const getMobileHistoryExportContext = () => {
+    if (mobileActiveSection === "chat" && selectedSession) {
+      return {
+        scopeLabel: selectedSession.customerName,
+        fileLabel: sanitizeExportFileName(selectedSession.customerName),
+        rows: buildMobileHistoryRows([selectedSession]),
+      };
+    }
+
+    const scopeLabel = sessionSource === "real"
+      ? "conversas-reais"
+      : sessionSource === "simulated"
+      ? "conversas-de-teste"
+      : "todas-as-conversas";
+
+    return {
+      scopeLabel,
+      fileLabel: sanitizeExportFileName(scopeLabel),
+      rows: buildMobileHistoryRows(displayedSessions),
+    };
+  };
+
+  const handleExportMobileHistoryExcel = async () => {
+    const { rows, scopeLabel, fileLabel } = getMobileHistoryExportContext();
+    if (!rows.length) {
+      window.alert("Nenhum histórico disponível para exportar em Excel.");
+      return;
+    }
+
+    const { utils, writeFile } = await import("xlsx");
+    const workbook = utils.book_new();
+    const worksheet = utils.json_to_sheet(rows);
+    worksheet["!cols"] = [
+      { wch: 24 },
+      { wch: 18 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 70 },
+      { wch: 24 },
+      { wch: 36 },
+    ];
+    utils.book_append_sheet(workbook, worksheet, "Historico");
+    writeFile(workbook, `historico-${fileLabel}.xlsx`);
+    addLog("system", "Histórico exportado em Excel no Modo Celular", `${scopeLabel}: ${rows.length} registros`);
+  };
+
+  const handleExportMobileHistoryPdf = async () => {
+    const { rows, scopeLabel, fileLabel } = getMobileHistoryExportContext();
+    if (!rows.length) {
+      window.alert("Nenhum histórico disponível para exportar em PDF.");
+      return;
+    }
+
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
+    let cursorY = margin;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Histórico do Modo Celular", margin, cursorY);
+    cursorY += 18;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Escopo: ${scopeLabel}`, margin, cursorY);
+    cursorY += 14;
+    doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, margin, cursorY);
+    cursorY += 22;
+
+    rows.forEach((row) => {
+      const headerLines = doc.splitTextToSize(
+        `${row.conversa} | ${row.telefone} | ${row.origem} | ${row.horario}`,
+        pageWidth - margin * 2
+      );
+      const bodyLines = doc.splitTextToSize(
+        `Remetente: ${row.remetente} | Tipo: ${row.tipo}\nMensagem: ${row.mensagem}${row.tags ? `\nTags: ${row.tags}` : ""}${row.observacoes ? `\nObservações: ${row.observacoes}` : ""}`,
+        pageWidth - margin * 2
+      );
+      const blockHeight = (headerLines.length + bodyLines.length) * 12 + 18;
+
+      if (cursorY + blockHeight > pageHeight - margin) {
+        doc.addPage();
+        cursorY = margin;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.text(headerLines, margin, cursorY);
+      cursorY += headerLines.length * 12;
+
+      doc.setFont("helvetica", "normal");
+      doc.text(bodyLines, margin, cursorY);
+      cursorY += bodyLines.length * 12 + 8;
+
+      doc.setDrawColor(60, 72, 88);
+      doc.line(margin, cursorY, pageWidth - margin, cursorY);
+      cursorY += 12;
+    });
+
+    doc.save(`historico-${fileLabel}.pdf`);
+    addLog("system", "Histórico exportado em PDF no Modo Celular", `${scopeLabel}: ${rows.length} registros`);
+  };
+
   if (isViewingPublicSite) {
-    const isAiStudio = window.location.hostname.includes("run.app") || 
-                       window.location.hostname.includes("localhost") || 
-                       window.location.hostname.includes("127.0.0.1") ||
-                       window.location.hostname.includes("stackblitz");
+    const isLocalEnvironment = window.location.hostname.includes("localhost") ||
+      window.location.hostname.includes("127.0.0.1");
     
-    const showBackBanner = isAiStudio;
+    const showBackBanner = isLocalEnvironment;
 
     return (
       <PublicSite 
@@ -1926,6 +2074,27 @@ export default function App() {
           {mobileActiveSection === 'list' ? (
             /* CONVERSATION LIST VIEW */
             <div className="flex-1 flex flex-col min-h-0 bg-[#070b12]" id="mobile-chat-list-view">
+              <div className="px-3 py-2 bg-[#0b101d] border-b border-slate-800/60 shrink-0">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={handleExportMobileHistoryExcel}
+                    className="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-bold text-emerald-300 hover:text-white cursor-pointer flex items-center justify-center gap-2"
+                    title="Exportar o histórico atual da lista em Excel"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Exportar Excel</span>
+                  </button>
+                  <button
+                    onClick={handleExportMobileHistoryPdf}
+                    className="px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-xs font-bold text-indigo-300 hover:text-white cursor-pointer flex items-center justify-center gap-2"
+                    title="Exportar o histórico atual da lista em PDF"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Exportar PDF</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Quick Filters */}
               <div className="p-2.5 bg-[#0b101d] border-b border-slate-800/60 shrink-0">
                 <div className="grid grid-cols-3 gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800/40">
@@ -2085,6 +2254,27 @@ export default function App() {
                   }`}>
                     {selectedSession?.isReal ? "Real" : "Teste"}
                   </span>
+                </div>
+              </div>
+
+              <div className="px-3 py-2 bg-[#0b101d] border-b border-slate-800/60 shrink-0">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={handleExportMobileHistoryExcel}
+                    className="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-bold text-emerald-300 hover:text-white cursor-pointer flex items-center justify-center gap-2"
+                    title="Exportar esta conversa em Excel"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Exportar Excel</span>
+                  </button>
+                  <button
+                    onClick={handleExportMobileHistoryPdf}
+                    className="px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-xs font-bold text-indigo-300 hover:text-white cursor-pointer flex items-center justify-center gap-2"
+                    title="Exportar esta conversa em PDF"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Exportar PDF</span>
+                  </button>
                 </div>
               </div>
 
