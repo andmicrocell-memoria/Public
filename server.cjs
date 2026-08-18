@@ -854,57 +854,20 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
 
   Diretrizes de resposta:
   1. Use Portugu\xEAs do Brasil.
-  2. Entenda comandos em linguagem simples e informal, sem exigir termos t\xE9cnicos do usu\xE1rio.
-  3. Seja direta, objetiva e orientada \xE0 a\xE7\xE3o.
-  4. Traduza qualquer pedido em execu\xE7\xE3o pr\xE1tica, com prioridade, ordem e resultado esperado.
-  5. Nunca responder como atendimento ao cliente nessa aba; o foco \xE9 opera\xE7\xE3o interna.
-  6. Evite textos longos e gen\xE9ricos; priorize checklist e execu\xE7\xE3o.
-  7. Quando o usu\xE1rio pedir para "fazer/configurar/melhorar", responda com:
-    - O que ser\xE1 feito agora
-    - Passo a passo curto
-    - Valida\xE7\xE3o final
-  8. Em temas t\xE9cnicos, sempre considerar e propor melhorias para:
-    - Painel operacional
-    - Rob\xF4 de atendimento
-    - Fluxo Meta API -> Chatwoot -> Gemini
-    - Site da AndMicrocell
-  9. Para melhorias do site, inclua no m\xEDnimo:
-    - 1 melhoria t\xE9cnica (performance/SEO/estrutura)
-    - 1 melhoria comercial (convers\xE3o/CTA/oferta)
-  10. Para melhorias do rob\xF4 e integra\xE7\xF5es, inclua no m\xEDnimo:
-    - 1 ajuste de confiabilidade (logs, retries, valida\xE7\xE3o)
-    - 1 ajuste de qualidade de resposta (prompt/contexto/roteamento)
-  11. Se o usu\xE1rio reportar erro, bug, falha, queda, lentid\xE3o, timeout ou problema no chat/painel:
-    - N\xC3O diga que "n\xE3o pode verificar" ou "n\xE3o tem capacidade".
-    - Assuma postura de suporte operacional t\xE9cnico e entregue triagem objetiva.
-    - Traga hip\xF3tese prov\xE1vel, verifica\xE7\xE3o imediata e a\xE7\xE3o corretiva de curto prazo.
-  12. Para incidentes t\xE9cnicos, mantenha os 4 blocos com foco pr\xE1tico:
-    - Situa\xE7\xE3o: resumo do sintoma reportado.
-    - A\xE7\xE3o Recomendada: passos execut\xE1veis agora (ordem de execu\xE7\xE3o).
-    - Risco: impacto se n\xE3o agir.
-    - Pr\xF3ximo Passo: confirma\xE7\xE3o objetiva do resultado esperado.
-  13. Evite encaminhar genericamente para TI/suporte sem antes sugerir passos concretos que o operador pode executar.
-  14. Sempre que poss\xEDvel, inclua um mini checklist de valida\xE7\xE3o (ex: recarregar sem cache, testar endpoint, confirmar deploy ativo, capturar mensagem exata do erro).
-  15. Atue como agente de melhoria cont\xEDnua. Para d\xFAvidas de neg\xF3cio/tecnologia, proponha otimiza\xE7\xF5es pr\xE1ticas para:
-    - Painel operacional (UX, estabilidade, m\xE9tricas, produtividade)
-    - Rob\xF4 de atendimento
-    - Fluxo oficial Meta API -> Chatwoot -> Gemini
-    - Site da AndMicrocell (performance, convers\xE3o, SEO, conte\xFAdo)
-  16. Quando o pedido envolver cria\xE7\xE3o/configura\xE7\xE3o, responda com plano execut\xE1vel em etapas curtas contendo:
-    - Pr\xE9-requisitos
-    - Configura\xE7\xE3o
-    - Testes de valida\xE7\xE3o
-    - Crit\xE9rio de sucesso
-  17. Se o usu\xE1rio pedir "fa\xE7a" ou "configure", assuma execu\xE7\xE3o orientada a resultado: detalhe a sequ\xEAncia de implementa\xE7\xE3o e priorize o caminho mais seguro e r\xE1pido.
-  18. Em integra\xE7\xF5es, sempre explicite pontos de verifica\xE7\xE3o por camada:
-    - Meta API (entrada e autentica\xE7\xE3o)
-    - Chatwoot (inbox, webhook e token)
-    - Backend (rotas e logs)
-    - Gemini (chamada, prompt e fallback)
-  19. Em melhorias de site, sempre sugerir no m\xEDnimo uma melhoria t\xE9cnica e uma melhoria comercial.
-  20. Limite r\xEDgido de resposta: no m\xE1ximo 8 linhas curtas.
-  21. Proibido usar markdown, negrito com **, listas longas ou blocos extensos.
-  22. Mantenha o foco em opera\xE7\xE3o interna; n\xE3o responder em tom de atendimento ao cliente.
+  2. Entenda comandos em linguagem simples e informal, sem exigir termos t\xE9cnicos.
+  3. Converse de forma natural (como um operador experiente), sem respostas rob\xF3ticas ou repetitivas.
+  4. Nunca responder como atendimento ao cliente; o foco \xE9 opera\xE7\xE3o interna.
+  5. Evite loop: n\xE3o repetir frases de abertura como "Agente IA online" ou equivalentes.
+  6. Se a pergunta for curta (ex: "arruma isso", "melhora o robo"), devolva uma resposta curta com a\xE7\xE3o imediata.
+  7. Quando o usu\xE1rio pedir para fazer/configurar/melhorar, responda em 3 partes curtas:
+    - O que vou fazer agora
+    - Passos de execu\xE7\xE3o
+    - Como validar que deu certo
+  8. Para incidentes t\xE9cnicos, use 4 blocos curtos: Situa\xE7\xE3o, A\xE7\xE3o, Risco, Pr\xF3ximo passo.
+  9. Em integra\xE7\xF5es, considerar sempre as camadas Meta API -> Chatwoot -> Backend -> Gemini.
+  10. Em melhorias de site, incluir pelo menos 1 ganho t\xE9cnico e 1 ganho comercial.
+  11. Limite de tamanho: no m\xE1ximo 6 linhas curtas, sem markdown e sem text\xE3o.
+  12. Finalize com uma \xFAnica pr\xF3xima a\xE7\xE3o objetiva.
   `;
   };
   const compactOperationsReply = (rawText) => {
@@ -915,6 +878,31 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
     const condensed = cleaned.split("\n").map((line) => line.trim()).filter(Boolean).slice(0, 8).join("\n");
     const safeText = condensed.replace(/atendimento ao cliente/gi, "opera\xE7\xE3o interna").replace(/cliente final/gi, "opera\xE7\xE3o interna").replace(/suporte ao cliente/gi, "suporte operacional");
     return safeText.length > 900 ? `${safeText.slice(0, 900)}...` : safeText;
+  };
+  const isLoopLikeReply = (reply, lastAi, lastUser) => {
+    const r = (reply || "").toLowerCase().trim();
+    const a = (lastAi || "").toLowerCase().trim();
+    const u = (lastUser || "").toLowerCase().trim();
+    if (!r) return true;
+    const genericStarts = [
+      "agente ia online",
+      "situa\xE7\xE3o:",
+      "acao recomendada:",
+      "a\xE7\xE3o recomendada:",
+      "pedido operacional identificado"
+    ];
+    const startsGeneric = genericStarts.some((s) => r.startsWith(s));
+    const tooSimilar = a && (r === a || r.includes(a) || a.includes(r));
+    const tooUnrelated = u.length > 8 && !r.includes(u.split(" ")[0]);
+    return startsGeneric || tooSimilar || tooUnrelated;
+  };
+  const buildDirectOpsReply = (lastUserMessage) => {
+    const msg = (lastUserMessage || "").trim();
+    return `Entendido. Vou tratar isso agora de forma operacional.
+O que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.
+Passos: validar contexto, executar ajuste, testar resultado.
+Valida\xE7\xE3o: confirmar comportamento esperado sem erro e com resposta objetiva.
+Pr\xF3ximo passo: me diga apenas o resultado esperado em 1 frase.`;
   };
   app.post("/api/agent/transcribe-audio", async (req, res) => {
     try {
@@ -961,14 +949,19 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
         return res.status(400).json({ error: "Configura\xE7\xE3o do agente ausente." });
       }
       if (normalizedMode === "customer_support") {
-        const lastUserMessage = messages[messages.length - 1]?.text || "";
+        const lastUserMessage2 = messages[messages.length - 1]?.text || "";
         const historyLength = messages.length - 1;
-        const staticResponse = getStaticGreetingResponse(lastUserMessage, historyLength);
+        const staticResponse = getStaticGreetingResponse(lastUserMessage2, historyLength);
         if (staticResponse) {
           return res.json({ text: staticResponse });
         }
       }
       const systemPrompt = normalizedMode === "operations" ? buildOperationsSystemInstruction(config) : buildSystemInstruction(config);
+      const lastUserMessage = messages[messages.length - 1]?.text || "";
+      const lastAiMessage = [...messages].reverse().find((m) => {
+        const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
+        return sender === "agent" || sender === "model";
+      })?.text || "";
       const contents = messages.slice(-6).map((m) => {
         const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
         return {
@@ -988,42 +981,44 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
           }
         });
         const baseReplyText = response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?";
-        const replyText = normalizedMode === "operations" ? compactOperationsReply(baseReplyText) : baseReplyText;
+        let replyText = normalizedMode === "operations" ? compactOperationsReply(baseReplyText) : baseReplyText;
+        if (normalizedMode === "operations" && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
+          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage));
+        }
         return res.json({ text: replyText });
       } catch (geminiError) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
         if (normalizedMode === "operations") {
-          const lastUserMessage2 = messages[messages.length - 1]?.text?.toLowerCase() || "";
+          const lastUserMessage3 = messages[messages.length - 1]?.text?.toLowerCase() || "";
           const topics = [];
-          if (lastUserMessage2.includes("site")) topics.push("site");
-          if (lastUserMessage2.includes("chatwoot")) topics.push("chatwoot");
-          if (lastUserMessage2.includes("meta") || lastUserMessage2.includes("whatsapp")) topics.push("meta api");
-          if (lastUserMessage2.includes("gemini") || lastUserMessage2.includes("ia")) topics.push("gemini");
-          if (lastUserMessage2.includes("painel")) topics.push("painel");
-          if (lastUserMessage2.includes("robo") || lastUserMessage2.includes("bot")) topics.push("robo");
+          if (lastUserMessage3.includes("site")) topics.push("site");
+          if (lastUserMessage3.includes("chatwoot")) topics.push("chatwoot");
+          if (lastUserMessage3.includes("meta") || lastUserMessage3.includes("whatsapp")) topics.push("meta api");
+          if (lastUserMessage3.includes("gemini") || lastUserMessage3.includes("ia")) topics.push("gemini");
+          if (lastUserMessage3.includes("painel")) topics.push("painel");
+          if (lastUserMessage3.includes("robo") || lastUserMessage3.includes("bot")) topics.push("robo");
           const foco = topics.length > 0 ? topics.join(", ") : "opera\xE7\xE3o geral";
-          const opsFallback = `Situa\xE7\xE3o: pedido operacional identificado com foco em ${foco}.
-A\xE7\xE3o Recomendada: validar Meta API -> Chatwoot -> Backend -> Gemini, come\xE7ando por logs e autentica\xE7\xE3o.
-Risco: falhas ocultas geram retrabalho e queda de performance.
-Pr\xF3ximo Passo: me diga a tarefa exata em 1 frase para eu devolver execu\xE7\xE3o imediata.
-Melhoria Extra Sugerida: checklist di\xE1rio de 10 minutos para sa\xFAde do fluxo.`;
+          const opsFallback = `Entendido. Foco atual: ${foco}.
+Vou agir assim: validar Meta API -> Chatwoot -> Backend -> Gemini, com prioridade em logs e autentica\xE7\xE3o.
+Risco: sem essa checagem, o problema volta em loop.
+Pr\xF3ximo passo: me diga a tarefa exata em 1 frase para eu devolver execu\xE7\xE3o imediata.`;
           return res.json({
             text: opsFallback,
             isSimulatedFallback: true,
             apiKeyNotice: "Configure a GEMINI_API_KEY no painel Secrets para respostas mais avan\xE7adas e din\xE2micas."
           });
         }
-        const lastUserMessage = messages[messages.length - 1]?.text?.toLowerCase() || "";
+        const lastUserMessage2 = messages[messages.length - 1]?.text?.toLowerCase() || "";
         let fallbackResponse = `Ol\xE1! Sou o assistente virtual da ${config.name}. Como posso ajudar?`;
-        if (lastUserMessage.includes("horario") || lastUserMessage.includes("hor\xE1rio") || lastUserMessage.includes("abre") || lastUserMessage.includes("fecha")) {
+        if (lastUserMessage2.includes("horario") || lastUserMessage2.includes("hor\xE1rio") || lastUserMessage2.includes("abre") || lastUserMessage2.includes("fecha")) {
           fallbackResponse = `Nosso hor\xE1rio de funcionamento \xE9: ${config.businessHours || "de segunda a sexta, das 9h \xE0s 18h"}. Ficamos muito felizes com o seu interesse!`;
-        } else if (lastUserMessage.includes("endereco") || lastUserMessage.includes("endere\xE7o") || lastUserMessage.includes("onde") || lastUserMessage.includes("localizacao") || lastUserMessage.includes("localiza\xE7\xE3o")) {
+        } else if (lastUserMessage2.includes("endereco") || lastUserMessage2.includes("endere\xE7o") || lastUserMessage2.includes("onde") || lastUserMessage2.includes("localizacao") || lastUserMessage2.includes("localiza\xE7\xE3o")) {
           fallbackResponse = config.address ? `N\xF3s estamos localizados em: ${config.address}. Venha nos visitar!` : `N\xF3s atuamos principalmente de forma digital ou com entregas diretas!`;
-        } else if (lastUserMessage.includes("preco") || lastUserMessage.includes("pre\xE7o") || lastUserMessage.includes("quanto") || lastUserMessage.includes("valor")) {
+        } else if (lastUserMessage2.includes("preco") || lastUserMessage2.includes("pre\xE7o") || lastUserMessage2.includes("quanto") || lastUserMessage2.includes("valor")) {
           fallbackResponse = `Para valores e or\xE7amentos detalhados do nosso segmento de ${config.category}, fale com nossos especialistas! O que exatamente voc\xEA procura?`;
         } else if (config.faqs && config.faqs.length > 0) {
           const matchedFaq = config.faqs.find(
-            (f) => lastUserMessage.includes(f.question.toLowerCase()) || f.question.toLowerCase().split(" ").some((word) => word.length > 4 && lastUserMessage.includes(word))
+            (f) => lastUserMessage2.includes(f.question.toLowerCase()) || f.question.toLowerCase().split(" ").some((word) => word.length > 4 && lastUserMessage2.includes(word))
           );
           if (matchedFaq) {
             fallbackResponse = matchedFaq.answer;
