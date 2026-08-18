@@ -902,8 +902,19 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
     - Backend (rotas e logs)
     - Gemini (chamada, prompt e fallback)
   19. Em melhorias de site, sempre sugerir no m\xEDnimo uma melhoria t\xE9cnica e uma melhoria comercial.
-  20. Ao final de cada resposta operacional, inclua uma se\xE7\xE3o curta "Melhoria Extra Sugerida" com 1 ganho adicional de alto impacto.
+  20. Limite r\xEDgido de resposta: no m\xE1ximo 8 linhas curtas.
+  21. Proibido usar markdown, negrito com **, listas longas ou blocos extensos.
+  22. Mantenha o foco em opera\xE7\xE3o interna; n\xE3o responder em tom de atendimento ao cliente.
   `;
+  };
+  const compactOperationsReply = (rawText) => {
+    const cleaned = (rawText || "").replace(/\*\*/g, "").replace(/^\s*[-*]\s+/gm, "").replace(/\r/g, "").trim();
+    if (!cleaned) {
+      return "Situa\xE7\xE3o: solicita\xE7\xE3o recebida.\nA\xE7\xE3o Recomendada: me diga a tarefa em 1 frase para eu montar execu\xE7\xE3o imediata.\nRisco: sem escopo, h\xE1 retrabalho.\nPr\xF3ximo Passo: enviar objetivo e prazo desejado.";
+    }
+    const condensed = cleaned.split("\n").map((line) => line.trim()).filter(Boolean).slice(0, 8).join("\n");
+    const safeText = condensed.replace(/atendimento ao cliente/gi, "opera\xE7\xE3o interna").replace(/cliente final/gi, "opera\xE7\xE3o interna").replace(/suporte ao cliente/gi, "suporte operacional");
+    return safeText.length > 900 ? `${safeText.slice(0, 900)}...` : safeText;
   };
   app.post("/api/agent/transcribe-audio", async (req, res) => {
     try {
@@ -972,10 +983,12 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
           contents,
           config: {
             systemInstruction: systemPrompt,
-            temperature: 0.7
+            temperature: normalizedMode === "operations" ? 0.25 : 0.7,
+            maxOutputTokens: normalizedMode === "operations" ? 220 : 900
           }
         });
-        const replyText = response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?";
+        const baseReplyText = response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?";
+        const replyText = normalizedMode === "operations" ? compactOperationsReply(baseReplyText) : baseReplyText;
         return res.json({ text: replyText });
       } catch (geminiError) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
@@ -989,23 +1002,11 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
           if (lastUserMessage2.includes("painel")) topics.push("painel");
           if (lastUserMessage2.includes("robo") || lastUserMessage2.includes("bot")) topics.push("robo");
           const foco = topics.length > 0 ? topics.join(", ") : "opera\xE7\xE3o geral";
-          const opsFallback = `**Situa\xE7\xE3o**
-Pedido operacional identificado com foco em ${foco}.
-
-**A\xE7\xE3o Recomendada**
-1. Definir objetivo de resultado (ex: reduzir falhas, aumentar convers\xE3o, acelerar resposta).
-2. Executar checklist por camada: Meta API -> Chatwoot -> Backend -> Gemini.
-3. Validar logs, autentica\xE7\xE3o, webhook, tempo de resposta e fallback.
-4. Aplicar melhoria r\xE1pida de alto impacto e medir resultado em seguida.
-
-**Risco**
-Sem valida\xE7\xE3o por camada, o fluxo pode parecer funcional mas manter falhas ocultas e retrabalho.
-
-**Pr\xF3ximo Passo**
-Me diga a tarefa exata em uma frase (ex: "melhorar resposta do bot" ou "corrigir webhook chatwoot") que eu devolvo o plano de execu\xE7\xE3o imediato.
-
-**Melhoria Extra Sugerida**
-Criar rotina di\xE1ria de 10 minutos com checklist de sa\xFAde do fluxo (entrada Meta API, entrega Chatwoot, resposta Gemini e logs de erro).`;
+          const opsFallback = `Situa\xE7\xE3o: pedido operacional identificado com foco em ${foco}.
+A\xE7\xE3o Recomendada: validar Meta API -> Chatwoot -> Backend -> Gemini, come\xE7ando por logs e autentica\xE7\xE3o.
+Risco: falhas ocultas geram retrabalho e queda de performance.
+Pr\xF3ximo Passo: me diga a tarefa exata em 1 frase para eu devolver execu\xE7\xE3o imediata.
+Melhoria Extra Sugerida: checklist di\xE1rio de 10 minutos para sa\xFAde do fluxo.`;
           return res.json({
             text: opsFallback,
             isSimulatedFallback: true,
