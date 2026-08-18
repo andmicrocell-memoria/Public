@@ -170,6 +170,10 @@ try {
 // Wrapper for Firestore Config loading/saving with Local File backup/fallback
 async function getFirebaseConfig() {
   const localConfig = loadStoredConfig() || {};
+  const normalizeRuntimeMode = (value: any) => {
+    return value === "customer_support" ? "customer_support" : "operations_internal";
+  };
+
   if (db) {
     try {
       const configDocRef = doc(db, "config", "business");
@@ -180,22 +184,31 @@ async function getFirebaseConfig() {
           ...localConfig,
           ...firestoreData,
           chatwootApiAccessToken: (firestoreData.chatwootApiAccessToken || localConfig.chatwootApiAccessToken || "Q1DpLpBXSGYWVP7VGunkEkwL").trim(),
-          chatwootUrl: (firestoreData.chatwootUrl || localConfig.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim()
+          chatwootUrl: (firestoreData.chatwootUrl || localConfig.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim(),
+          aiRuntimeMode: normalizeRuntimeMode(firestoreData.aiRuntimeMode || localConfig.aiRuntimeMode)
         };
       }
     } catch (e: any) {
       console.error("Error reading config from Firestore:", e.message);
     }
   }
-  return localConfig;
+  return {
+    ...localConfig,
+    aiRuntimeMode: normalizeRuntimeMode(localConfig.aiRuntimeMode)
+  };
 }
 
 async function saveFirebaseConfig(config: any) {
-  saveStoredConfig(config); // save to local file as backup
+  const normalizedConfig = {
+    ...(config || {}),
+    aiRuntimeMode: config?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal"
+  };
+
+  saveStoredConfig(normalizedConfig); // save to local file as backup
   if (db) {
     try {
       const configDocRef = doc(db, "config", "business");
-      await setDoc(configDocRef, config);
+      await setDoc(configDocRef, normalizedConfig);
       console.log("Config saved to Firestore successfully!");
     } catch (e: any) {
       console.error("Error saving config to Firestore:", e.message);
@@ -1082,7 +1095,9 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
   app.post("/api/agent/chat", async (req, res) => {
     try {
       const { config, messages, mode } = req.body;
-      const normalizedMode = mode === "operations" ? "operations" : "customer_support";
+      const runtimeMode = config?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal";
+      const requestedMode = mode === "operations" ? "operations" : "customer_support";
+      const normalizedMode = runtimeMode === "operations_internal" ? "operations" : requestedMode;
 
       if (!config) {
         return res.status(400).json({ error: "Configuração do agente ausente." });
@@ -2175,6 +2190,15 @@ IMPORTANTE: Retorne APENAS o array JSON válido, sem cercas de código (markdown
         if (storedConfig.autoRespondWhatsApp !== true) {
           addWebhookLog('system', `Mensagem do Chatwoot recebida (Robô Desativado)`, `O robô recebeu a mensagem de ${customerName}, mas não respondeu porque o botão "Responder Automaticamente" está desativado nas configurações.`);
           console.log("[Chatwoot Webhook] Responder Automaticamente está desativado. Ignorando processamento.");
+          return;
+        }
+
+        // Safety switch: by default this AI runs internal operations only.
+        // Customer-facing replies are blocked unless runtime mode is explicitly enabled.
+        const runtimeMode = storedConfig?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal";
+        if (runtimeMode !== "customer_support") {
+          addWebhookLog('system', `Mensagem do Chatwoot recebida (Modo Interno da IA)`, `A IA está em modo interno (operações) e não responderá clientes até ativar o modo de atendimento.`);
+          console.log("[Chatwoot Webhook] Runtime mode is operations_internal. Skipping customer auto-reply.");
           return;
         }
 
