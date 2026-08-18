@@ -1088,15 +1088,8 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         return res.status(400).json({ error: "Configuração do agente ausente." });
       }
 
-      if (normalizedMode === "customer_support") {
-        const lastUserMessage = messages[messages.length - 1]?.text || "";
-        const historyLength = messages.length - 1;
-        const staticResponse = getStaticGreetingResponse(lastUserMessage, historyLength);
-
-        if (staticResponse) {
-          return res.json({ text: staticResponse });
-        }
-      }
+      // In the panel simulator, always prefer live Gemini generation.
+      // Deterministic local templates make the assistant look fake and repetitive.
 
       const systemPrompt =
         normalizedMode === "operations"
@@ -1114,14 +1107,8 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
           return sender === "agent" || sender === "model";
         })?.text || "";
 
-      const simpleOpsCommand =
-        normalizedMode === "operations" &&
-        lastUserMessage.trim().length > 0 &&
-        lastUserMessage.trim().length <= 120;
-
-      if (simpleOpsCommand) {
-        return res.json({ text: compactOperationsReply(buildImmediateOpsExecutionReply(lastUserMessage, opsStyle), opsStyle) });
-      }
+      // Removed short-command shortcut to avoid returning local template text
+      // instead of a true Gemini response.
       
       // Structure chat messages in standard format, keeping only the last 6 messages for consistency and speed
       const contents = messages.slice(-6).map((m: any, idx: number, arr: any[]) => {
@@ -1141,7 +1128,7 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
           contents,
           config: {
             systemInstruction: systemPrompt,
-            temperature: normalizedMode === "operations" ? 0.25 : 0.7,
+            temperature: normalizedMode === "operations" ? 0.55 : 0.75,
             maxOutputTokens: normalizedMode === "operations" ? 220 : 900,
           }
         });
@@ -1168,53 +1155,17 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
 
         if (normalizedMode === "operations") {
-          const lastUserMessage = messages[messages.length - 1]?.text?.toLowerCase() || "";
-          const topics: string[] = [];
-          if (lastUserMessage.includes("site")) topics.push("site");
-          if (lastUserMessage.includes("chatwoot")) topics.push("chatwoot");
-          if (lastUserMessage.includes("meta") || lastUserMessage.includes("whatsapp")) topics.push("meta api");
-          if (lastUserMessage.includes("gemini") || lastUserMessage.includes("ia")) topics.push("gemini");
-          if (lastUserMessage.includes("painel")) topics.push("painel");
-          if (lastUserMessage.includes("robo") || lastUserMessage.includes("bot")) topics.push("robo");
-
-          const foco = topics.length > 0 ? topics.join(", ") : "operação geral";
-
-          const opsFallback = `Entendido. Foco atual: ${foco}.\nVou agir assim: validar Meta API -> Chatwoot -> Backend -> Gemini, com prioridade em logs e autenticação.\nRisco: sem essa checagem, o problema volta em loop.\nPróximo passo: me diga a tarefa exata em 1 frase para eu devolver execução imediata.`;
-
           return res.json({
-            text: opsFallback,
+            text: "Nao consegui gerar com Gemini agora. Verifique GEMINI_API_KEY e tente novamente em alguns segundos.",
             isSimulatedFallback: true,
-            apiKeyNotice: "Configure a GEMINI_API_KEY no painel Secrets para respostas mais avançadas e dinâmicas."
+            apiKeyNotice: "Configure a GEMINI_API_KEY valida para habilitar respostas reais do Gemini neste painel."
           });
         }
         
-        // Dynamic smart fallback simulation in Portuguese based on keywords
-        const lastUserMessage = messages[messages.length - 1]?.text?.toLowerCase() || "";
-        let fallbackResponse = `Olá! Sou o assistente virtual da ${config.name}. Como posso ajudar?`;
-        
-        if (lastUserMessage.includes("horario") || lastUserMessage.includes("horário") || lastUserMessage.includes("abre") || lastUserMessage.includes("fecha")) {
-          fallbackResponse = `Nosso horário de funcionamento é: ${config.businessHours || "de segunda a sexta, das 9h às 18h"}. Ficamos muito felizes com o seu interesse!`;
-        } else if (lastUserMessage.includes("endereco") || lastUserMessage.includes("endereço") || lastUserMessage.includes("onde") || lastUserMessage.includes("localizacao") || lastUserMessage.includes("localização")) {
-          fallbackResponse = config.address 
-            ? `Nós estamos localizados em: ${config.address}. Venha nos visitar!`
-            : `Nós atuamos principalmente de forma digital ou com entregas diretas!`;
-        } else if (lastUserMessage.includes("preco") || lastUserMessage.includes("preço") || lastUserMessage.includes("quanto") || lastUserMessage.includes("valor")) {
-          fallbackResponse = `Para valores e orçamentos detalhados do nosso segmento de ${config.category}, fale com nossos especialistas! O que exatamente você procura?`;
-        } else if (config.faqs && config.faqs.length > 0) {
-          // Attempt to match an FAQ
-          const matchedFaq = config.faqs.find((f: any) => 
-            lastUserMessage.includes(f.question.toLowerCase()) || 
-            f.question.toLowerCase().split(" ").some((word: string) => word.length > 4 && lastUserMessage.includes(word))
-          );
-          if (matchedFaq) {
-            fallbackResponse = matchedFaq.answer;
-          }
-        }
-
         return res.json({ 
-          text: fallbackResponse, 
+          text: "Gemini indisponivel no momento. Ajuste a chave e tente novamente para obter resposta real da IA.", 
           isSimulatedFallback: true,
-          apiKeyNotice: "Configure a GEMINI_API_KEY no painel Secrets do AI Studio para obter respostas dinâmicas em tempo real com IA!"
+          apiKeyNotice: "Defina GEMINI_API_KEY no ambiente do servidor para respostas reais do Gemini."
         });
       }
     } catch (err: any) {
