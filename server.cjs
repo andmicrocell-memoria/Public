@@ -1063,6 +1063,42 @@ Se quiser, j\xE1 te devolvo a sequ\xEAncia exata de comandos e checklist.`;
       });
     }
   });
+  app.post("/api/chat", async (req, res) => {
+    try {
+      const mensagem = String(req.body?.mensagem || "").trim();
+      if (!mensagem) {
+        return res.status(400).json({ erro: "Mensagem ausente." });
+      }
+      const client = getGeminiClient();
+      const response = await client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: mensagem,
+        config: {
+          systemInstruction: "Voc\xEA \xE9 um executor do painel. Sempre use as ferramentas para criar ou alterar rob\xF4s e sites. N\xE3o d\xEA explica\xE7\xF5es te\xF3ricas.",
+          tools: [{ functionDeclarations: painelFunctionDeclarations }],
+          toolConfig: {
+            functionCallingConfig: {
+              mode: import_genai.FunctionCallingConfigMode.AUTO
+            }
+          }
+        }
+      });
+      const functionCalls = response.functionCalls || [];
+      if (functionCalls.length > 0) {
+        const call = functionCalls[0];
+        const handler = painelToolHandlers[call.name || ""];
+        if (!handler) {
+          return res.json({ resposta: `[A\xC7\xC3O N\xC3O EXECUTADA]: ferramenta '${call.name}' n\xE3o implementada.` });
+        }
+        const resultado = handler(call.args || {});
+        const mensagemResultado = resultado?.sucesso ? resultado?.mensagem || `Arquivo gerado em ${resultado?.arquivo || "data/"}` : "Falha ao executar a a\xE7\xE3o solicitada.";
+        return res.json({ resposta: `[A\xC7\xC3O EXECUTADA]: ${mensagemResultado}` });
+      }
+      return res.json({ resposta: response.text || "Sem resposta textual." });
+    } catch (error) {
+      return res.status(500).json({ erro: error?.message || "Erro interno no servidor." });
+    }
+  });
   app.post("/api/agent/chat", async (req, res) => {
     try {
       const { config, messages, mode } = req.body;
