@@ -678,6 +678,34 @@ Tabela de Pre\xE7os - Formata\xE7\xE3o e Backup (PCs e Notebooks):
 - Formata\xE7\xE3o com Backup de 400 GB a 600 GB: R$ 190,00
 - Formata\xE7\xE3o com Backup de 600 GB a 1000 GB (1 TB): R$ 230,00
 `;
+    const buildOperationsSystemInstruction2 = (config2) => {
+      const { name: name2, category: category2, phone: phone2, businessHours: businessHours2, address: address2, specialOffers: specialOffers2 } = config2 || {};
+      return `Voc\xEA \xE9 a Agente Operacional da empresa ${name2 || "AndMicrocell"}.
+
+Objetivo:
+- Atuar como assistente de opera\xE7\xE3o, gest\xE3o e tomada de decis\xE3o.
+- Responder para o time interno (n\xE3o para clientes finais).
+
+Contexto da empresa:
+- Segmento: ${category2 || "assist\xEAncia t\xE9cnica"}
+- Telefone principal: ${phone2 || "n\xE3o informado"}
+- Hor\xE1rio comercial: ${businessHours2 || "n\xE3o informado"}
+- Endere\xE7o: ${address2 || "n\xE3o informado"}
+- Ofertas atuais: ${specialOffers2 || "n\xE3o informado"}
+
+Diretrizes de resposta:
+1. Use Portugu\xEAs do Brasil.
+2. Seja direta, objetiva e orientada \xE0 a\xE7\xE3o.
+3. Estruture sempre em 4 blocos curtos:
+   - Situa\xE7\xE3o
+   - A\xE7\xE3o Recomendada
+   - Risco
+   - Pr\xF3ximo Passo
+4. Quando faltar dado, diga exatamente o que est\xE1 faltando e sugira como obter.
+5. Nunca responder como atendimento ao cliente nessa aba; o foco \xE9 opera\xE7\xE3o interna.
+6. Evite textos longos e gen\xE9ricos; priorize checklist e execu\xE7\xE3o.
+`;
+    };
     const hardwareRulesText = `
 Regras Espec\xEDficas de Pre\xE7os de Computadores e Notebooks (MUITO IMPORTANTE):
 1. Manuten\xE7\xE3o Preventiva de Notebooks:
@@ -875,20 +903,24 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
   });
   app.post("/api/agent/chat", async (req, res) => {
     try {
-      const { config, messages } = req.body;
+      const { config, messages, mode } = req.body;
+      const normalizedMode = mode === "operations" ? "operations" : "customer_support";
       if (!config) {
         return res.status(400).json({ error: "Configura\xE7\xE3o do agente ausente." });
       }
-      const lastUserMessage = messages[messages.length - 1]?.text || "";
-      const historyLength = messages.length - 1;
-      const staticResponse = getStaticGreetingResponse(lastUserMessage, historyLength);
-      if (staticResponse) {
-        return res.json({ text: staticResponse });
+      if (normalizedMode === "customer_support") {
+        const lastUserMessage = messages[messages.length - 1]?.text || "";
+        const historyLength = messages.length - 1;
+        const staticResponse = getStaticGreetingResponse(lastUserMessage, historyLength);
+        if (staticResponse) {
+          return res.json({ text: staticResponse });
+        }
       }
-      const systemPrompt = buildSystemInstruction(config);
+      const systemPrompt = normalizedMode === "operations" ? buildOperationsSystemInstruction(config) : buildSystemInstruction(config);
       const contents = messages.slice(-6).map((m) => {
+        const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
         return {
-          role: m.sender === "customer" ? "user" : "model",
+          role: sender === "customer" || sender === "user" ? "user" : "model",
           parts: [{ text: m.text }]
         };
       });
@@ -906,17 +938,17 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
         return res.json({ text: replyText });
       } catch (geminiError) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
-        const lastUserMessage2 = messages[messages.length - 1]?.text?.toLowerCase() || "";
+        const lastUserMessage = messages[messages.length - 1]?.text?.toLowerCase() || "";
         let fallbackResponse = `Ol\xE1! Sou o assistente virtual da ${config.name}. Como posso ajudar?`;
-        if (lastUserMessage2.includes("horario") || lastUserMessage2.includes("hor\xE1rio") || lastUserMessage2.includes("abre") || lastUserMessage2.includes("fecha")) {
+        if (lastUserMessage.includes("horario") || lastUserMessage.includes("hor\xE1rio") || lastUserMessage.includes("abre") || lastUserMessage.includes("fecha")) {
           fallbackResponse = `Nosso hor\xE1rio de funcionamento \xE9: ${config.businessHours || "de segunda a sexta, das 9h \xE0s 18h"}. Ficamos muito felizes com o seu interesse!`;
-        } else if (lastUserMessage2.includes("endereco") || lastUserMessage2.includes("endere\xE7o") || lastUserMessage2.includes("onde") || lastUserMessage2.includes("localizacao") || lastUserMessage2.includes("localiza\xE7\xE3o")) {
+        } else if (lastUserMessage.includes("endereco") || lastUserMessage.includes("endere\xE7o") || lastUserMessage.includes("onde") || lastUserMessage.includes("localizacao") || lastUserMessage.includes("localiza\xE7\xE3o")) {
           fallbackResponse = config.address ? `N\xF3s estamos localizados em: ${config.address}. Venha nos visitar!` : `N\xF3s atuamos principalmente de forma digital ou com entregas diretas!`;
-        } else if (lastUserMessage2.includes("preco") || lastUserMessage2.includes("pre\xE7o") || lastUserMessage2.includes("quanto") || lastUserMessage2.includes("valor")) {
+        } else if (lastUserMessage.includes("preco") || lastUserMessage.includes("pre\xE7o") || lastUserMessage.includes("quanto") || lastUserMessage.includes("valor")) {
           fallbackResponse = `Para valores e or\xE7amentos detalhados do nosso segmento de ${config.category}, fale com nossos especialistas! O que exatamente voc\xEA procura?`;
         } else if (config.faqs && config.faqs.length > 0) {
           const matchedFaq = config.faqs.find(
-            (f) => lastUserMessage2.includes(f.question.toLowerCase()) || f.question.toLowerCase().split(" ").some((word) => word.length > 4 && lastUserMessage2.includes(word))
+            (f) => lastUserMessage.includes(f.question.toLowerCase()) || f.question.toLowerCase().split(" ").some((word) => word.length > 4 && lastUserMessage.includes(word))
           );
           if (matchedFaq) {
             fallbackResponse = matchedFaq.answer;
