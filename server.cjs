@@ -150,6 +150,53 @@ function saveStoredConfig(config) {
     console.error("Error writing config file:", e);
   }
 }
+function sanitizeBotFileName(value) {
+  return (value || "bot").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "bot";
+}
+function salvarConfiguracaoBotTool(args) {
+  const nomeBot = String(args?.nomeBot || "bot").trim();
+  const portaNumero = Number(args?.porta);
+  const status = String(args?.status || "ativo").trim().toLowerCase();
+  if (!nomeBot) {
+    throw new Error("nomeBot \xE9 obrigat\xF3rio.");
+  }
+  if (!Number.isFinite(portaNumero) || portaNumero <= 0 || portaNumero > 65535) {
+    throw new Error("porta inv\xE1lida. Use um n\xFAmero entre 1 e 65535.");
+  }
+  ensureConfigDir();
+  const safeBotName = sanitizeBotFileName(nomeBot);
+  const botConfigPath = import_path2.default.join(configDir, `config_${safeBotName}.json`);
+  const payload = {
+    nomeBot,
+    porta: portaNumero,
+    status,
+    modificadoEm: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  import_fs2.default.writeFileSync(botConfigPath, JSON.stringify(payload, null, 2), "utf8");
+  return {
+    sucesso: true,
+    arquivo: import_path2.default.relative(process.cwd(), botConfigPath).replaceAll("\\", "/"),
+    configuracao: payload
+  };
+}
+var painelFunctionDeclarations = [
+  {
+    name: "salvarConfiguracaoBot",
+    description: "Cria ou atualiza o arquivo JSON de configura\xE7\xE3o de um rob\xF4 na pasta data.",
+    parameters: {
+      type: import_genai.Type.OBJECT,
+      properties: {
+        nomeBot: { type: import_genai.Type.STRING, description: "Nome do rob\xF4, por exemplo Atendimento_Vendas." },
+        porta: { type: import_genai.Type.NUMBER, description: "Porta de execu\xE7\xE3o do rob\xF4, por exemplo 8080." },
+        status: { type: import_genai.Type.STRING, description: "Status do rob\xF4: ativo ou inativo." }
+      },
+      required: ["nomeBot", "porta", "status"]
+    }
+  }
+];
+var painelToolHandlers = {
+  salvarConfiguracaoBot: salvarConfiguracaoBotTool
+};
 var db = null;
 try {
   let firebaseConfig = null;
@@ -1044,16 +1091,51 @@ Se quiser, j\xE1 te devolvo a sequ\xEAncia exata de comandos e checklist.`;
         };
       });
       try {
+        const useOpsTools = normalizedMode === "operations" || normalizedMode === "operations_pro";
+        const executionSystemInstruction = useOpsTools ? `Voc\xEA \xE9 um agente executor da AndMicrocell.
+Sua fun\xE7\xE3o \xE9 Chamar Fun\xE7\xF5es (tools) para criar e alterar configura\xE7\xF5es no sistema.
+Se o usu\xE1rio pedir algo que voc\xEA tem ferramenta para fazer, execute imediatamente sem dar explica\xE7\xF5es te\xF3ricas.` : systemPrompt;
         const client = getGeminiClient();
         const response = await client.models.generateContent({
           model: "gemini-2.5-flash",
           contents,
           config: {
-            systemInstruction: systemPrompt,
+            systemInstruction: executionSystemInstruction,
             temperature: normalizedMode === "operations_pro" ? 0.75 : normalizedMode === "operations" ? 0.55 : 0.75,
-            maxOutputTokens: normalizedMode === "operations_pro" ? 1200 : normalizedMode === "operations" ? 420 : 900
+            maxOutputTokens: normalizedMode === "operations_pro" ? 1200 : normalizedMode === "operations" ? 420 : 900,
+            ...useOpsTools ? {
+              tools: [{ functionDeclarations: painelFunctionDeclarations }],
+              toolConfig: {
+                functionCallingConfig: {
+                  mode: import_genai.FunctionCallingConfigMode.AUTO
+                }
+              }
+            } : {}
           }
         });
+        const functionCalls = response.functionCalls || [];
+        if (useOpsTools && functionCalls.length > 0) {
+          const executionResults = [];
+          for (const call of functionCalls) {
+            const handler = painelToolHandlers[call.name || ""];
+            if (!handler) {
+              executionResults.push(`Falha: ferramenta '${call.name}' n\xE3o implementada.`);
+              continue;
+            }
+            try {
+              const result = handler(call.args || {});
+              if (result?.sucesso) {
+                executionResults.push(`Executado: ${call.name} -> ${result.arquivo || "ok"}`);
+              } else {
+                executionResults.push(`Falha em ${call.name}: resposta inv\xE1lida.`);
+              }
+            } catch (toolErr) {
+              executionResults.push(`Falha em ${call.name}: ${toolErr?.message || "erro desconhecido"}`);
+            }
+          }
+          const opsReply = executionResults.join("\n");
+          return res.json({ text: opsReply, executedTools: functionCalls.map((c) => c.name) });
+        }
         const baseReplyText = response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?";
         let replyText = normalizedMode === "operations" || normalizedMode === "operations_pro" ? compactOperationsReply(baseReplyText, opsStyle) : baseReplyText;
         if ((normalizedMode === "operations" || normalizedMode === "operations_pro") && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
