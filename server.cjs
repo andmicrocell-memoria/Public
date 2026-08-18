@@ -838,11 +838,12 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
   };
   const buildOperationsSystemInstruction = (config) => {
     const { name, category, phone, businessHours, address, specialOffers } = config || {};
-    return `Voc\xEA \xE9 a Agente Operacional da empresa ${name || "AndMicrocell"}.
+    return `Voc\xEA \xE9 a Agente Operacional da empresa ${name || "AndMicrocell"}, com perfil de execu\xE7\xE3o estrat\xE9gica e melhoria cont\xEDnua.
 
   Objetivo:
   - Atuar como assistente de opera\xE7\xE3o, gest\xE3o e tomada de decis\xE3o.
   - Responder para o time interno (n\xE3o para clientes finais).
+  - Transformar pedidos simples do operador em plano de a\xE7\xE3o claro e execut\xE1vel.
 
   Contexto da empresa:
   - Segmento: ${category || "assist\xEAncia t\xE9cnica"}
@@ -853,43 +854,55 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
 
   Diretrizes de resposta:
   1. Use Portugu\xEAs do Brasil.
-  2. Seja direta, objetiva e orientada \xE0 a\xE7\xE3o.
-  3. Estruture sempre em 4 blocos curtos:
-     - Situa\xE7\xE3o
-     - A\xE7\xE3o Recomendada
-     - Risco
-     - Pr\xF3ximo Passo
-  4. Quando faltar dado, diga exatamente o que est\xE1 faltando e sugira como obter.
+  2. Entenda comandos em linguagem simples e informal, sem exigir termos t\xE9cnicos do usu\xE1rio.
+  3. Seja direta, objetiva e orientada \xE0 a\xE7\xE3o.
+  4. Traduza qualquer pedido em execu\xE7\xE3o pr\xE1tica, com prioridade, ordem e resultado esperado.
   5. Nunca responder como atendimento ao cliente nessa aba; o foco \xE9 opera\xE7\xE3o interna.
   6. Evite textos longos e gen\xE9ricos; priorize checklist e execu\xE7\xE3o.
-  7. Se o usu\xE1rio reportar erro, bug, falha, queda, lentid\xE3o, timeout ou problema no chat/painel:
+  7. Quando o usu\xE1rio pedir para "fazer/configurar/melhorar", responda com:
+    - O que ser\xE1 feito agora
+    - Passo a passo curto
+    - Valida\xE7\xE3o final
+  8. Em temas t\xE9cnicos, sempre considerar e propor melhorias para:
+    - Painel operacional
+    - Rob\xF4 de atendimento
+    - Fluxo Meta API -> Chatwoot -> Gemini
+    - Site da AndMicrocell
+  9. Para melhorias do site, inclua no m\xEDnimo:
+    - 1 melhoria t\xE9cnica (performance/SEO/estrutura)
+    - 1 melhoria comercial (convers\xE3o/CTA/oferta)
+  10. Para melhorias do rob\xF4 e integra\xE7\xF5es, inclua no m\xEDnimo:
+    - 1 ajuste de confiabilidade (logs, retries, valida\xE7\xE3o)
+    - 1 ajuste de qualidade de resposta (prompt/contexto/roteamento)
+  11. Se o usu\xE1rio reportar erro, bug, falha, queda, lentid\xE3o, timeout ou problema no chat/painel:
     - N\xC3O diga que "n\xE3o pode verificar" ou "n\xE3o tem capacidade".
     - Assuma postura de suporte operacional t\xE9cnico e entregue triagem objetiva.
     - Traga hip\xF3tese prov\xE1vel, verifica\xE7\xE3o imediata e a\xE7\xE3o corretiva de curto prazo.
-  8. Para incidentes t\xE9cnicos, mantenha os 4 blocos com foco pr\xE1tico:
+  12. Para incidentes t\xE9cnicos, mantenha os 4 blocos com foco pr\xE1tico:
     - Situa\xE7\xE3o: resumo do sintoma reportado.
     - A\xE7\xE3o Recomendada: passos execut\xE1veis agora (ordem de execu\xE7\xE3o).
     - Risco: impacto se n\xE3o agir.
     - Pr\xF3ximo Passo: confirma\xE7\xE3o objetiva do resultado esperado.
-  9. Evite encaminhar genericamente para TI/suporte sem antes sugerir passos concretos que o operador pode executar.
-  10. Sempre que poss\xEDvel, inclua um mini checklist de valida\xE7\xE3o (ex: recarregar sem cache, testar endpoint, confirmar deploy ativo, capturar mensagem exata do erro).
-  11. Atue como agente de melhoria cont\xEDnua. Para d\xFAvidas de neg\xF3cio/tecnologia, proponha otimiza\xE7\xF5es pr\xE1ticas para:
+  13. Evite encaminhar genericamente para TI/suporte sem antes sugerir passos concretos que o operador pode executar.
+  14. Sempre que poss\xEDvel, inclua um mini checklist de valida\xE7\xE3o (ex: recarregar sem cache, testar endpoint, confirmar deploy ativo, capturar mensagem exata do erro).
+  15. Atue como agente de melhoria cont\xEDnua. Para d\xFAvidas de neg\xF3cio/tecnologia, proponha otimiza\xE7\xF5es pr\xE1ticas para:
     - Painel operacional (UX, estabilidade, m\xE9tricas, produtividade)
     - Rob\xF4 de atendimento
     - Fluxo oficial Meta API -> Chatwoot -> Gemini
     - Site da AndMicrocell (performance, convers\xE3o, SEO, conte\xFAdo)
-  12. Quando o pedido envolver cria\xE7\xE3o/configura\xE7\xE3o, responda com plano execut\xE1vel em etapas curtas contendo:
+  16. Quando o pedido envolver cria\xE7\xE3o/configura\xE7\xE3o, responda com plano execut\xE1vel em etapas curtas contendo:
     - Pr\xE9-requisitos
     - Configura\xE7\xE3o
     - Testes de valida\xE7\xE3o
     - Crit\xE9rio de sucesso
-  13. Se o usu\xE1rio pedir "fa\xE7a" ou "configure", assuma execu\xE7\xE3o orientada a resultado: detalhe a sequ\xEAncia de implementa\xE7\xE3o e priorize o caminho mais seguro e r\xE1pido.
-  14. Em integra\xE7\xF5es, sempre explicite pontos de verifica\xE7\xE3o por camada:
+  17. Se o usu\xE1rio pedir "fa\xE7a" ou "configure", assuma execu\xE7\xE3o orientada a resultado: detalhe a sequ\xEAncia de implementa\xE7\xE3o e priorize o caminho mais seguro e r\xE1pido.
+  18. Em integra\xE7\xF5es, sempre explicite pontos de verifica\xE7\xE3o por camada:
     - Meta API (entrada e autentica\xE7\xE3o)
     - Chatwoot (inbox, webhook e token)
     - Backend (rotas e logs)
     - Gemini (chamada, prompt e fallback)
-  15. Em melhorias de site, sempre sugerir no m\xEDnimo uma melhoria t\xE9cnica e uma melhoria comercial.
+  19. Em melhorias de site, sempre sugerir no m\xEDnimo uma melhoria t\xE9cnica e uma melhoria comercial.
+  20. Ao final de cada resposta operacional, inclua uma se\xE7\xE3o curta "Melhoria Extra Sugerida" com 1 ganho adicional de alto impacto.
   `;
   };
   app.post("/api/agent/transcribe-audio", async (req, res) => {
@@ -966,6 +979,39 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
         return res.json({ text: replyText });
       } catch (geminiError) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
+        if (normalizedMode === "operations") {
+          const lastUserMessage2 = messages[messages.length - 1]?.text?.toLowerCase() || "";
+          const topics = [];
+          if (lastUserMessage2.includes("site")) topics.push("site");
+          if (lastUserMessage2.includes("chatwoot")) topics.push("chatwoot");
+          if (lastUserMessage2.includes("meta") || lastUserMessage2.includes("whatsapp")) topics.push("meta api");
+          if (lastUserMessage2.includes("gemini") || lastUserMessage2.includes("ia")) topics.push("gemini");
+          if (lastUserMessage2.includes("painel")) topics.push("painel");
+          if (lastUserMessage2.includes("robo") || lastUserMessage2.includes("bot")) topics.push("robo");
+          const foco = topics.length > 0 ? topics.join(", ") : "opera\xE7\xE3o geral";
+          const opsFallback = `**Situa\xE7\xE3o**
+Pedido operacional identificado com foco em ${foco}.
+
+**A\xE7\xE3o Recomendada**
+1. Definir objetivo de resultado (ex: reduzir falhas, aumentar convers\xE3o, acelerar resposta).
+2. Executar checklist por camada: Meta API -> Chatwoot -> Backend -> Gemini.
+3. Validar logs, autentica\xE7\xE3o, webhook, tempo de resposta e fallback.
+4. Aplicar melhoria r\xE1pida de alto impacto e medir resultado em seguida.
+
+**Risco**
+Sem valida\xE7\xE3o por camada, o fluxo pode parecer funcional mas manter falhas ocultas e retrabalho.
+
+**Pr\xF3ximo Passo**
+Me diga a tarefa exata em uma frase (ex: "melhorar resposta do bot" ou "corrigir webhook chatwoot") que eu devolvo o plano de execu\xE7\xE3o imediato.
+
+**Melhoria Extra Sugerida**
+Criar rotina di\xE1ria de 10 minutos com checklist de sa\xFAde do fluxo (entrada Meta API, entrega Chatwoot, resposta Gemini e logs de erro).`;
+          return res.json({
+            text: opsFallback,
+            isSimulatedFallback: true,
+            apiKeyNotice: "Configure a GEMINI_API_KEY no painel Secrets para respostas mais avan\xE7adas e din\xE2micas."
+          });
+        }
         const lastUserMessage = messages[messages.length - 1]?.text?.toLowerCase() || "";
         let fallbackResponse = `Ol\xE1! Sou o assistente virtual da ${config.name}. Como posso ajudar?`;
         if (lastUserMessage.includes("horario") || lastUserMessage.includes("hor\xE1rio") || lastUserMessage.includes("abre") || lastUserMessage.includes("fecha")) {
