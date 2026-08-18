@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
+import { FunctionCallingConfigMode, GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
 import { initializeApp } from "firebase/app";
@@ -110,6 +110,67 @@ function saveStoredConfig(config: any) {
     console.error("Error writing config file:", e);
   }
 }
+
+function sanitizeBotFileName(value: string) {
+  return (value || "bot")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 60) || "bot";
+}
+
+function salvarConfiguracaoBotTool(args: any) {
+  const nomeBot = String(args?.nomeBot || "bot").trim();
+  const portaNumero = Number(args?.porta);
+  const status = String(args?.status || "ativo").trim().toLowerCase();
+
+  if (!nomeBot) {
+    throw new Error("nomeBot é obrigatório.");
+  }
+  if (!Number.isFinite(portaNumero) || portaNumero <= 0 || portaNumero > 65535) {
+    throw new Error("porta inválida. Use um número entre 1 e 65535.");
+  }
+
+  ensureConfigDir();
+  const safeBotName = sanitizeBotFileName(nomeBot);
+  const botConfigPath = path.join(configDir, `config_${safeBotName}.json`);
+  const payload = {
+    nomeBot,
+    porta: portaNumero,
+    status,
+    modificadoEm: new Date().toISOString(),
+  };
+
+  fs.writeFileSync(botConfigPath, JSON.stringify(payload, null, 2), "utf8");
+
+  return {
+    sucesso: true,
+    arquivo: path.relative(process.cwd(), botConfigPath).replaceAll("\\", "/"),
+    configuracao: payload,
+  };
+}
+
+const painelFunctionDeclarations = [
+  {
+    name: "salvarConfiguracaoBot",
+    description: "Cria ou atualiza o arquivo JSON de configuração de um robô na pasta data.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        nomeBot: { type: Type.STRING, description: "Nome do robô, por exemplo Atendimento_Vendas." },
+        porta: { type: Type.NUMBER, description: "Porta de execução do robô, por exemplo 8080." },
+        status: { type: Type.STRING, description: "Status do robô: ativo ou inativo." },
+      },
+      required: ["nomeBot", "porta", "status"],
+    },
+  },
+];
+
+const painelToolHandlers: Record<string, (args: any) => any> = {
+  salvarConfiguracaoBot: salvarConfiguracaoBotTool,
+};
 
 // Initialize Firebase Firestore safely
 let db: any = null;
@@ -1137,16 +1198,60 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
       });
 
       try {
+        const useOpsTools = normalizedMode === "operations" || normalizedMode === "operations_pro";
+        const executionSystemInstruction = useOpsTools
+          ? `Você é um agente executor da AndMicrocell.
+Sua função é Chamar Funções (tools) para criar e alterar configurações no sistema.
+Se o usuário pedir algo que você tem ferramenta para fazer, execute imediatamente sem dar explicações teóricas.`
+          : systemPrompt;
+
         const client = getGeminiClient();
         const response = await client.models.generateContent({
           model: "gemini-2.5-flash",
           contents,
           config: {
-            systemInstruction: systemPrompt,
+            systemInstruction: executionSystemInstruction,
             temperature: normalizedMode === "operations_pro" ? 0.75 : normalizedMode === "operations" ? 0.55 : 0.75,
             maxOutputTokens: normalizedMode === "operations_pro" ? 1200 : normalizedMode === "operations" ? 420 : 900,
+            ...(useOpsTools
+              ? {
+                  tools: [{ functionDeclarations: painelFunctionDeclarations }],
+                  toolConfig: {
+                    functionCallingConfig: {
+                      mode: FunctionCallingConfigMode.AUTO,
+                    },
+                  },
+                }
+              : {}),
           }
         });
+
+        const functionCalls = response.functionCalls || [];
+        if (useOpsTools && functionCalls.length > 0) {
+          const executionResults: string[] = [];
+
+          for (const call of functionCalls) {
+            const handler = painelToolHandlers[call.name || ""];
+            if (!handler) {
+              executionResults.push(`Falha: ferramenta '${call.name}' não implementada.`);
+              continue;
+            }
+
+            try {
+              const result = handler(call.args || {});
+              if (result?.sucesso) {
+                executionResults.push(`Executado: ${call.name} -> ${result.arquivo || "ok"}`);
+              } else {
+                executionResults.push(`Falha em ${call.name}: resposta inválida.`);
+              }
+            } catch (toolErr: any) {
+              executionResults.push(`Falha em ${call.name}: ${toolErr?.message || "erro desconhecido"}`);
+            }
+          }
+
+          const opsReply = executionResults.join("\n");
+          return res.json({ text: opsReply, executedTools: functionCalls.map((c) => c.name) });
+        }
 
         const baseReplyText = response.text || "Desculpe, não entendi a sua mensagem. Poderia repetir?";
         let replyText =
