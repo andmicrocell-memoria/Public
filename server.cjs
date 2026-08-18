@@ -179,6 +179,25 @@ function salvarConfiguracaoBotTool(args) {
     configuracao: payload
   };
 }
+function alterarTelefoneSiteTool(args) {
+  const novoTelefone = String(args?.novoTelefone || "").trim();
+  if (!novoTelefone) {
+    throw new Error("novoTelefone \xE9 obrigat\xF3rio.");
+  }
+  ensureConfigDir();
+  const siteConfigPath = import_path2.default.join(configDir, "site_config.json");
+  const payload = {
+    telefone: novoTelefone,
+    modificadoEm: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  import_fs2.default.writeFileSync(siteConfigPath, JSON.stringify(payload, null, 2), "utf8");
+  return {
+    sucesso: true,
+    mensagem: `Telefone do site alterado para ${novoTelefone}!`,
+    arquivo: import_path2.default.relative(process.cwd(), siteConfigPath).replaceAll("\\", "/"),
+    configuracao: payload
+  };
+}
 var painelFunctionDeclarations = [
   {
     name: "salvarConfiguracaoBot",
@@ -192,10 +211,22 @@ var painelFunctionDeclarations = [
       },
       required: ["nomeBot", "porta", "status"]
     }
+  },
+  {
+    name: "alterarTelefoneSite",
+    description: "Atualiza o telefone do site no arquivo data/site_config.json.",
+    parameters: {
+      type: import_genai.Type.OBJECT,
+      properties: {
+        novoTelefone: { type: import_genai.Type.STRING, description: "Novo telefone exibido no site." }
+      },
+      required: ["novoTelefone"]
+    }
   }
 ];
 var painelToolHandlers = {
-  salvarConfiguracaoBot: salvarConfiguracaoBotTool
+  salvarConfiguracaoBot: salvarConfiguracaoBotTool,
+  alterarTelefoneSite: alterarTelefoneSiteTool
 };
 var db = null;
 try {
