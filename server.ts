@@ -883,7 +883,7 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
 10. Encerramento Objetivo da Conversa: Quando o cliente se despedir, agradecer ("Obrigado", "Valeu", "Tudo certo", "Entendido", "Tchau", "Boa noite", etc.) ou der sinais claros de que a dúvida foi resolvida e o atendimento se encerrou, responda de forma final, extremamente direta, amigável e objetiva. NUNCA faça novas perguntas redundantes ("Posso ajudar em algo mais?") ou tente prolongar a conversa desnecessariamente. Apenas agradeça, deseje um excelente dia/noite ou agende um horário para ele trazer o aparelho, e encerre por ali.`;
   };
 
-    const buildOperationsSystemInstruction = (config: any) => {
+    const buildOperationsSystemInstruction = (config: any, advancedMode = false) => {
       const { name, category, phone, businessHours, address, specialOffers } = config || {};
 
       return `Você é a Agente Operacional da empresa ${name || "AndMicrocell"}, com perfil de execução estratégica e melhoria contínua.
@@ -906,20 +906,16 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
   3. Converse de forma natural (como um operador experiente), sem respostas robóticas ou repetitivas.
   4. Nunca responder como atendimento ao cliente; o foco é operação interna.
   5. Evite loop: não repetir frases de abertura como "Agente IA online" ou equivalentes.
-  6. Se a pergunta for curta (ex: "arruma isso", "melhora o robo"), devolva uma resposta curta com ação imediata.
-  7. Quando o usuário pedir para fazer/configurar/melhorar, responda em 3 partes curtas:
-    - O que vou fazer agora
-    - Passos de execução
-    - Como validar que deu certo
-  8. Para incidentes técnicos, use 4 blocos curtos: Situação, Ação, Risco, Próximo passo.
-  9. Em integrações, considerar sempre as camadas Meta API -> Chatwoot -> Backend -> Gemini.
-  10. Em melhorias de site, incluir pelo menos 1 ganho técnico e 1 ganho comercial.
-  11. Limite de tamanho: no máximo 6 linhas curtas, sem markdown e sem textão.
-  12. Finalize com uma única próxima ação objetiva.
-  13. Comandos de estilo (quando o usuário começar a mensagem com):
+  6. Em integrações, considerar as camadas Meta API -> Chatwoot -> Backend -> Gemini.
+  7. Em melhorias de site, incluir pelo menos 1 ganho técnico e 1 ganho comercial.
+  8. Finalize com uma próxima ação objetiva.
+  9. Comandos de estilo (quando o usuário começar a mensagem com):
     - @rapido: resposta ultra curta e direta (3 linhas).
     - @executor: resposta objetiva com execução prática (5 linhas).
     - @detalhado: resposta completa e estruturada (até 8 linhas).
+  10. ${advancedMode
+    ? "Modo inteligente ativo: aprofunde diagnóstico, proponha alternativas, trade-offs e plano em fases quando fizer sentido."
+    : "Modo executor ativo: priorize ação imediata e clareza operacional."}
   `;
     };
 
@@ -948,10 +944,10 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         .trim();
 
       if (!cleaned) {
-        return "Situação: solicitação recebida.\nAção Recomendada: me diga a tarefa em 1 frase para eu montar execução imediata.\nRisco: sem escopo, há retrabalho.\nPróximo Passo: enviar objetivo e prazo desejado.";
+        return "Recebi sua solicitação. Descreva objetivo e contexto em 1 frase para eu te devolver um plano acionável.";
       }
 
-      const lineLimit = style === "rapido" ? 3 : style === "detalhado" ? 8 : 5;
+      const lineLimit = style === "rapido" ? 5 : style === "detalhado" ? 14 : 9;
 
       const condensed = cleaned
         .split("\n")
@@ -965,14 +961,13 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
         .replace(/cliente final/gi, "operação interna")
         .replace(/suporte ao cliente/gi, "suporte operacional");
 
-      const maxChars = style === "rapido" ? 320 : style === "detalhado" ? 1100 : 700;
+      const maxChars = style === "rapido" ? 700 : style === "detalhado" ? 2600 : 1700;
       return safeText.length > maxChars ? `${safeText.slice(0, maxChars)}...` : safeText;
     };
 
     const isLoopLikeReply = (reply: string, lastAi: string, lastUser: string) => {
       const r = (reply || "").toLowerCase().trim();
       const a = (lastAi || "").toLowerCase().trim();
-      const u = (lastUser || "").toLowerCase().trim();
       if (!r) return true;
 
       const genericStarts = [
@@ -984,21 +979,20 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
       ];
 
       const startsGeneric = genericStarts.some((s) => r.startsWith(s));
-      const tooSimilar = a && (r === a || r.includes(a) || a.includes(r));
-      const tooUnrelated = u.length > 8 && !r.includes(u.split(" ")[0]);
+      const tooSimilar = a && (r === a || (r.length > 40 && (r.includes(a) || a.includes(r))));
 
-      return startsGeneric || tooSimilar || tooUnrelated;
+      return startsGeneric || tooSimilar;
     };
 
     const buildDirectOpsReply = (lastUserMessage: string, style: OpsStyle = "executor") => {
       const msg = (lastUserMessage || "").trim();
       if (style === "rapido") {
-        return `Entendido. Vou executar ${msg || "essa tarefa"} agora.\nPassos: corrigir, testar e validar.\nPróximo passo: diga o resultado esperado em 1 frase.`;
+        return `Plano rápido: vou atacar ${msg || "essa tarefa"} agora.\nExecução: corrigir origem e validar ponta a ponta.\nMe diga o resultado final esperado em 1 frase.`;
       }
       if (style === "detalhado") {
-        return `Entendido. Vou tratar isso agora de forma operacional.\nO que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.\nPassos: validar contexto, executar ajuste, testar resultado ponta a ponta.\nValidação: confirmar comportamento esperado sem erro, sem loop e com resposta objetiva.\nRisco: sem validação completa, o problema pode voltar.\nPróximo passo: me diga ambiente e prioridade para eu detalhar a execução.`;
+        return `Plano de execução para ${msg || "essa tarefa"}:\n1) Diagnóstico da causa raiz e hipóteses.\n2) Correção com menor risco de regressão.\n3) Validação funcional ponta a ponta e monitoramento.\nCritério de sucesso: sem erro, sem loop e com resposta consistente.\nMe passe ambiente e prioridade para detalhar as ações por etapa.`;
       }
-      return `Entendido. Vou tratar isso agora de forma operacional.\nO que vou fazer: atacar ${msg || "essa tarefa"} com prioridade alta.\nPassos: validar contexto, executar ajuste, testar resultado.\nValidação: confirmar comportamento esperado sem erro e com resposta objetiva.\nPróximo passo: me diga apenas o resultado esperado em 1 frase.`;
+      return `Execução proposta para ${msg || "essa tarefa"}:\n- validar causa\n- aplicar ajuste\n- testar fluxo completo\nSe quiser, já te devolvo a sequência exata de comandos e checklist.`;
     };
 
     const buildImmediateOpsExecutionReply = (lastUserMessage: string, style: OpsStyle = "executor") => {
@@ -1096,8 +1090,14 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
     try {
       const { config, messages, mode } = req.body;
       const runtimeMode = config?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal";
-      const requestedMode = mode === "operations" ? "operations" : "customer_support";
-      const normalizedMode = runtimeMode === "operations_internal" ? "operations" : requestedMode;
+      const requestedMode = mode === "operations_pro"
+        ? "operations_pro"
+        : mode === "operations"
+        ? "operations"
+        : "customer_support";
+      const normalizedMode = runtimeMode === "operations_internal"
+        ? (requestedMode === "operations_pro" ? "operations_pro" : "operations")
+        : requestedMode;
 
       if (!config) {
         return res.status(400).json({ error: "Configuração do agente ausente." });
@@ -1107,8 +1107,8 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
       // Deterministic local templates make the assistant look fake and repetitive.
 
       const systemPrompt =
-        normalizedMode === "operations"
-          ? buildOperationsSystemInstruction(config)
+        normalizedMode === "operations" || normalizedMode === "operations_pro"
+          ? buildOperationsSystemInstruction(config, normalizedMode === "operations_pro")
           : buildSystemInstruction(config);
 
       const rawLastUserMessage = messages[messages.length - 1]?.text || "";
@@ -1143,23 +1143,23 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
           contents,
           config: {
             systemInstruction: systemPrompt,
-            temperature: normalizedMode === "operations" ? 0.55 : 0.75,
-            maxOutputTokens: normalizedMode === "operations" ? 220 : 900,
+            temperature: normalizedMode === "operations_pro" ? 0.75 : normalizedMode === "operations" ? 0.55 : 0.75,
+            maxOutputTokens: normalizedMode === "operations_pro" ? 1200 : normalizedMode === "operations" ? 420 : 900,
           }
         });
 
         const baseReplyText = response.text || "Desculpe, não entendi a sua mensagem. Poderia repetir?";
         let replyText =
-          normalizedMode === "operations"
+          normalizedMode === "operations" || normalizedMode === "operations_pro"
             ? compactOperationsReply(baseReplyText, opsStyle)
             : baseReplyText;
 
-        if (normalizedMode === "operations" && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
+        if ((normalizedMode === "operations" || normalizedMode === "operations_pro") && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
           replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage, opsStyle), opsStyle);
         }
 
         if (
-          normalizedMode === "operations" &&
+          (normalizedMode === "operations" || normalizedMode === "operations_pro") &&
           (replyText.length < 80 || /->\s*$/.test(replyText) || replyText.endsWith(":"))
         ) {
           replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage, opsStyle), opsStyle);
@@ -1169,7 +1169,7 @@ Diretrizes de Conversação (MUITO IMPORTANTE):
       } catch (geminiError: any) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
 
-        if (normalizedMode === "operations") {
+        if (normalizedMode === "operations" || normalizedMode === "operations_pro") {
           return res.json({
             text: "Nao consegui gerar com Gemini agora. Verifique GEMINI_API_KEY e tente novamente em alguns segundos.",
             isSimulatedFallback: true,

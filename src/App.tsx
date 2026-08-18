@@ -580,6 +580,10 @@ export default function App() {
   const [showAddReviewForm, setShowAddReviewForm] = useState(false);
   const [agentCommandInput, setAgentCommandInput] = useState("");
   const [isAgentSending, setIsAgentSending] = useState(false);
+  const [agentThinkingMode, setAgentThinkingMode] = useState<'operations' | 'operations_pro'>(() => {
+    const saved = localStorage.getItem("andmicrocell_agent_thinking_mode");
+    return saved === "operations" ? "operations" : "operations_pro";
+  });
   const [agentMessages, setAgentMessages] = useState<Array<{ id: string; role: "user" | "ai" | "error"; text: string; timestamp: string }>>([
     {
       id: "agent-welcome",
@@ -920,8 +924,6 @@ export default function App() {
       .replace(/\*\*/g, "")
       .replace(/^\s*[-*]\s+/gm, "")
       .replace(/\r/g, "")
-      .replace(/atendimento ao cliente/gi, "operacao interna")
-      .replace(/cliente final/gi, "operacao interna")
       .trim();
 
     if (!text) return "Sem conteudo de resposta da IA.";
@@ -930,10 +932,10 @@ export default function App() {
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
-      .slice(0, 8)
+      .slice(0, 18)
       .join("\n");
 
-    return compact.length > 900 ? `${compact.slice(0, 900)}...` : compact;
+    return compact.length > 2600 ? `${compact.slice(0, 2600)}...` : compact;
   };
 
   const handleSendAgentCommand = async () => {
@@ -967,7 +969,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           config,
-          mode: "operations",
+          mode: agentThinkingMode,
           messages: payloadMessages
         })
       });
@@ -1006,6 +1008,10 @@ export default function App() {
       setIsAgentSending(false);
     }
   };
+
+  useEffect(() => {
+    localStorage.setItem("andmicrocell_agent_thinking_mode", agentThinkingMode);
+  }, [agentThinkingMode]);
 
   // Helper to generate AI reply for a given session and message history
   const generateAiReplyForConversation = async (
@@ -3890,6 +3896,29 @@ export default function App() {
                     <p className="text-xs text-slate-400 mt-1" id="agent-subtitle">
                       Use esta área para enviar comandos estratégicos e operacionais para a IA da AndMicrocell.
                     </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">Nível da IA</span>
+                      <button
+                        onClick={() => setAgentThinkingMode("operations")}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
+                          agentThinkingMode === "operations"
+                            ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-300"
+                            : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        Executor
+                      </button>
+                      <button
+                        onClick={() => setAgentThinkingMode("operations_pro")}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
+                          agentThinkingMode === "operations_pro"
+                            ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                            : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        Inteligente
+                      </button>
+                    </div>
                   </div>
 
                   <div className="h-[420px] overflow-y-auto p-4 rounded-2xl bg-slate-950/40 border border-slate-800 space-y-3" id="agent-messages-list">
