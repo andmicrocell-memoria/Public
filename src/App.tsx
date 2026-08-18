@@ -913,6 +913,27 @@ export default function App() {
     setLogs(prev => [newLog, ...prev.slice(0, 29)]); // keep last 30 logs
   };
 
+  const compactAgentReply = (rawText: string) => {
+    const text = (rawText || "")
+      .replace(/\*\*/g, "")
+      .replace(/^\s*[-*]\s+/gm, "")
+      .replace(/\r/g, "")
+      .replace(/atendimento ao cliente/gi, "operacao interna")
+      .replace(/cliente final/gi, "operacao interna")
+      .trim();
+
+    if (!text) return "Sem conteudo de resposta da IA.";
+
+    const compact = text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 8)
+      .join("\n");
+
+    return compact.length > 900 ? `${compact.slice(0, 900)}...` : compact;
+  };
+
   const handleSendAgentCommand = async () => {
     const command = agentCommandInput.trim();
     if (!command || isAgentSending) return;
@@ -957,7 +978,7 @@ export default function App() {
       const aiMsg = {
         id: `agent-ai-${Date.now()}`,
         role: "ai" as const,
-        text: data?.text || "Sem conteúdo de resposta da IA.",
+        text: compactAgentReply(data?.text || "Sem conteudo de resposta da IA."),
         timestamp: new Date().toTimeString().substring(0, 5)
       };
 
