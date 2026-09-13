@@ -1,0 +1,79 @@
+{
+  "messages": [
+    {
+      "role": "model",
+      "text": "Perfeito. Para te ajudar com precisão, me diga o modelo completo do aparelho e o que está acontecendo com ele.",
+      "timestamp": "2026-07-30T16:10:08.989Z"
+    },
+    {
+      "timestamp": "2026-07-30T17:13:46.629Z",
+      "text": "Boa tarde",
+      "role": "user"
+    },
+    {
+      "text": "Boa tarde! 😉\n\nAh, sim! Me desculpe pela repetição, o sistema se confundiu por um instante. Já anotei aqui: seu iPhone 11 Pro Max precisa de uma troca de bateria.\n\nNossas baterias são de altíssima qualidade Premium, com durabilidade e rendimento idênticos aos da original de fábrica. A estimativa de preço para a troca de bateria do iPhone 11 é a partir de R$ 180.\n\nO orçamento é 100% gratuito e sem compromisso, e podemos confirmar o valor exato aqui na loja. Que tal dar uma passada por aqui? Estamos abertos e prontos para te atender! 🚀",
+      "role": "model",
+      "timestamp": "2026-07-30T17:13:46.629Z"
+    },
+    {
+      "text": "Esse  valor já é com a mão de obra?",
+      "role": "user",
+      "timestamp": "2026-07-30T17:17:16.973Z"
+    },
+    {
+      "role": "model",
+      "timestamp": "2026-07-30T17:17:16.973Z",
+      "text": "Sim, esse valor \"a partir de\" já inclui a peça Premium e a mão de obra especializada para a troca da bateria do seu iPhone 11 Pro Max. 😉\n\nOferecemos garantia estendida de verdade, viu? O ideal é trazer o aparelho para uma avaliação rápida e gratuita em nossa loja. Assim, nosso técnico já te passa o valor exato e sem surpresas! 😊"
+    },
+    {
+      "text": "Ótimo, gostei",
+      "timestamp": "2026-07-30T17:18:34.569Z",
+      "role": "user"
+    },
+    {
+      "text": "Que ótimo que gostou! 😊\n\nEstamos abertos e prontos para te receber aqui na Travessa das Flores, 167 Salgado, em Caruaru/PE.\n\nGostaria de agendar um horário ou prefere dar uma passada por aqui hoje à tarde? Assim já agilizamos o atendimento para você! 🚀",
+      "role": "model",
+      "timestamp": "2026-07-30T17:18:34.569Z"
+    },
+    {
+      "role": "user",
+      "text": "Sim essa semana eu entro em contato pra confirmar o dia",
+      "timestamp": "2026-07-30T17:20:33.710Z"
+    },
+    {
+      "text": "Combinado! Estaremos aguardando seu contato. 😉\n\nLembre-se que nosso orçamento é sempre 100% gratuito e sem compromisso. Qualquer dúvida, é só chamar! Tenha um excelente dia! 👋",
+      "role": "model",
+      "timestamp": "2026-07-30T17:20:33.710Z"
+    },
+    {
+      "timestamp": "2026-07-30T17:21:03.781Z",
+      "text": "Obrigado 🤝",
+      "role": "user"
+    },
+    {
+      "role": "model",
+      "timestamp": "2026-07-30T17:21:03.781Z",
+      "text": "De nada! 😉\n\nAgradecemos muito seu contato e ficamos à disposição para quando você puder trazer seu iPhone 11 Pro Max para a troca de bateria.\n\nTenha um excelente dia! 👋"
+    },
+    {
+      "text": "Teste do dono com número de celular BR",
+      "role": "user",
+      "timestamp": "2026-07-30T19:32:07.081Z"
+    },
+    {
+      "timestamp": "2026-07-30T19:32:07.081Z",
+      "text": "Olá! Mensagem recebida. 😉 Posso ajudar em algo?",
+      "role": "model"
+    },
+    {
+      "role": "user",
+      "text": "Teste do dono com número de celular BR",
+      "timestamp": "2026-07-30T19:35:05.897Z"
+    },
+    {
+      "role": "model",
+      "text": "Olá! Mensagem recebida. 😉\n\nComo posso ajudar você hoje? Fico à disposição!",
+      "timestamp": "2026-07-30T19:35:05.897Z"
+    }
+  ]
+}

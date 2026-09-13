@@ -1,0 +1,157 @@
+{
+  "category": "reparo e assistência técnica",
+  "chatwootApiAccessToken": "Q1DpLpBXSGYWVP7VGunkEkwL",
+  "autoRespondReviews": true,
+  "chatwootInboxId": null,
+  "aiRuntimeMode": "operations_internal",
+  "whatsappVerifyToken": "andersonti2026",
+  "name": "AndMicrocell",
+  "whatsappPhoneNumberId": "1256883267499769",
+  "phone": "+55 81 99999-9999",
+  "tone": "friendly",
+  "autoRespondWhatsApp": true,
+  "chatwootAccountId": 1,
+  "chatwootUrl": "https://atendimento.andmicrocell.com.br",
+  "pricingTable": [
+    {
+      "deviceModel": "iPhone 11",
+      "category": "iphone",
+      "serviceName": "Troca de Tela Premium (OLED)",
+      "id": "p-1",
+      "notes": "Tela qualidade premium com True Tone ativo naturalmente.",
+      "priceEstimate": "A partir de R$ 320"
+    },
+    {
+      "category": "iphone",
+      "id": "p-2",
+      "notes": "Excelente durabilidade, similar à original de fábrica.",
+      "deviceModel": "iPhone 11",
+      "serviceName": "Troca de Bateria Premium",
+      "priceEstimate": "A partir de R$ 180"
+    },
+    {
+      "priceEstimate": "A partir de R$ 550",
+      "serviceName": "Troca de Tela Premium (OLED)",
+      "deviceModel": "iPhone 12",
+      "notes": "Tela qualidade premium com True Tone ativo.",
+      "id": "p-3",
+      "category": "iphone"
+    },
+    {
+      "deviceModel": "iPhone 12",
+      "priceEstimate": "A partir de R$ 260",
+      "serviceName": "Troca de Bateria Premium",
+      "id": "p-4",
+      "notes": "Excelente durabilidade, similar à original de fábrica.",
+      "category": "iphone"
+    },
+    {
+      "priceEstimate": "A partir de R$ 850",
+      "id": "p-5",
+      "notes": "Tela premium, cores e toque perfeitos.",
+      "category": "iphone",
+      "deviceModel": "iPhone 13",
+      "serviceName": "Troca de Tela Premium (OLED)"
+    },
+    {
+      "serviceName": "Troca de Bateria Premium",
+      "id": "p-6",
+      "deviceModel": "iPhone 13",
+      "priceEstimate": "A partir de R$ 350",
+      "notes": "Excelente durabilidade, similar à original de fábrica.",
+      "category": "iphone"
+    },
+    {
+      "category": "android",
+      "deviceModel": "Samsung Linha S (S20/S21)",
+      "id": "p-7",
+      "priceEstimate": "A partir de R$ 650",
+      "serviceName": "Troca de Tela Premium",
+      "notes": "Qualidade premium com alta definição de toque."
+    },
+    {
+      "serviceName": "Instalação de SSD 240GB + Limpeza Interna + Formatação",
+      "priceEstimate": "A partir de R$ 220",
+      "deviceModel": "Notebooks (Dell, Lenovo, HP, etc)",
+      "id": "p-8",
+      "notes": "Garante até 10x mais velocidade de inicialização.",
+      "category": "notebook"
+    },
+    {
+      "deviceModel": "Notebooks (Dell, Lenovo, HP, etc)",
+      "serviceName": "Instalação de SSD 480GB + Limpeza Interna + Formatação",
+      "id": "p-9",
+      "notes": "Garante até 10x mais velocidade de inicialização e muito mais espaço.",
+      "category": "notebook",
+      "priceEstimate": "A partir de R$ 290"
+    },
+    {
+      "category": "notebook",
+      "priceEstimate": "R$ 100",
+      "notes": "Essencial para evitar lentidão e desligamento por superaquecimento.",
+      "id": "p-10",
+      "deviceModel": "Notebooks (Qualquer marca)",
+      "serviceName": "Limpeza Física Interna + Troca de Pasta Térmica Prata"
+    },
+    {
+      "category": "iphone",
+      "deviceModel": "iPhone (Qualquer modelo)",
+      "serviceName": "Serviço Adicional de Transplante (EEPROM ou BMS)",
+      "priceEstimate": "R$ 150 adicionais",
+      "notes": "Procedimento de micro-solda opcional para remover a mensagem de peça desconhecida.",
+      "id": "p-11"
+    },
+    {
+      "id": "p-12",
+      "category": "other",
+      "deviceModel": "Celulares (Geral)",
+      "priceEstimate": "A partir de R$ 120",
+      "notes": "Processo de lavagem química em cuba ultrassônica para remover oxidações.",
+      "serviceName": "Desoxidação Química Profissional (Aparelhos molhados)"
+    }
+  ],
+  "testimonials": [
+    {
+      "date": "Há 2 dias",
+      "name": "João Pedro",
+      "text": "Excelente trabalho na troca de tela do meu iPhone 13 Pro. Ficou perfeito, com True Tone ativo e me deram película de brinde. Atendimento de primeira em Caruaru!",
+      "id": "t-1",
+      "avatar": "JP",
+      "rating": 5,
+      "role": "Proprietário de iPhone 13 Pro"
+    },
+    {
+      "role": "Cliente de Caruaru",
+      "id": "t-2",
+      "name": "Mariana Souza",
+      "text": "Levei meu celular que tinha caído na água e outra assistência disse que não tinha conserto. O pessoal da AndMicrocell ressuscitou a placa! Nota 10 pelo profissionalismo e agilidade.",
+      "date": "Há 1 semana",
+      "avatar": "MS",
+      "rating": 5
+    },
+    {
+      "date": "Há 3 dias",
+      "name": "Carlos Eduardo",
+      "text": "Troquei a bateria do meu aparelho. Serviço super rápido, preço justo e garantia de verdade. Recomendo demais para quem busca confiança e qualidade em Caruaru.",
+      "role": "Cliente Satisfeito",
+      "id": "t-3",
+      "rating": 5,
+      "avatar": "CE"
+    },
+    {
+      "rating": 5,
+      "avatar": "AB",
+      "date": "Há 5 dias",
+      "name": "Ana Beatriz",
+      "text": "Atendimento impecável! O orçamento é de fato gratuito e explicaram tudo certinho antes de mexer no aparelho. O celular ficou novinho e o pós-venda deles é sensacional.",
+      "id": "t-4",
+      "role": "Cliente"
+    }
+  ],
+  "specialOffers": "Atendimento especializado e orçamento gratuito.",
+  "mutedPhones": [],
+  "whatsappAccessToken": "EAArWaUJyWxoBSNvKmTb4jByCpe7KxgmXJFBbn0ZAkpgBcfypVC03ZBfi4k3ZCrEt4VtOXjc7YHWHEk0SuXCylFts6pBRxdG6RvODZCjDg5OrXjNj4yFDhLWdjLCrGEzGBfCOazfsdAirZAaTsh8adZApKNLkyZANuB2Eu4sQOCDZCqnkD5EdaWKuXZC7hWzjiTQZDZD",
+  "faqs": [],
+  "businessHours": "Segunda a Sexta: 08h às 12h e das 14h às 18h",
+  "address": "Caruaru, PE"
+}

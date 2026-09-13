@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Enable reading and writing config for server/backup sync
+    match /config/business {
+      allow read, write: if true;
+    }
+    
+    // Enable reading and writing blog posts
+    match /posts/{postId} {
+      allow read, write: if true;
+    }
+
+    // Enable reading and writing processed message IDs to prevent duplicates
+    match /processed_messages/{messageId} {
+      allow read, write: if true;
+    }
+
+    // Enable reading and writing WhatsApp history for persistence
+    match /whatsapp_history/{fromNumber} {
+      allow read, write: if true;
+    }
+
+    // Enable reading and writing Webhook logs for persistence in dashboard
+    match /webhook_logs/{logId} {
+      allow read, write: if true;
+    }
+    
+    // Default deny for everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

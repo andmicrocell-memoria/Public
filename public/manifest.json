@@ -1,0 +1,24 @@
+{
+  "short_name": "AndMicrocell",
+  "name": "AndMicrocell Chat & Painel",
+  "description": "Aplicativo do Chat WhatsApp e Painel de Automações da AndMicrocell",
+  "icons": [
+    {
+      "src": "src/assets/images/regenerated_image_1783646296675.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "src/assets/images/regenerated_image_1783646296675.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "./?utm_source=pwa&mobile_chat_only=true",
+  "background_color": "#070b12",
+  "theme_color": "#0b101d",
+  "display": "standalone",
+  "orientation": "portrait-primary"
+}
