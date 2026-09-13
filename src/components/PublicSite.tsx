@@ -367,7 +367,7 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
               id="header-wa-btn"
             >
               <Phone className="w-3 h-3 fill-white" />
-              <span>Orçamento Grátis • 81 99155-4178</span>
+              <span>Orçamento Grátis</span>
             </a>
           </div>
         </div>
@@ -491,7 +491,7 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
                     className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
                     <Phone className="w-4 h-4 fill-white" />
-                    <span>Solicitar Orçamento • 81 99155-4178</span>
+                    <span>Solicitar Orçamento</span>
                   </a>
                 </div>
 
@@ -1030,7 +1030,7 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
       <div className="fixed bottom-6 right-6 z-50 group flex flex-col items-end">
         {/* Hover message */}
         <div className="bg-neutral-950 text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-2 rounded-full shadow-lg border border-neutral-850 mb-2 mr-1 scale-0 group-hover:scale-100 origin-bottom-right transition-all duration-300 pointer-events-none whitespace-nowrap">
-          💬 Fale Conosco no WhatsApp • 81 99155-4178
+          💬 Fale Conosco no WhatsApp
         </div>
         <a
           href={getWhatsAppLink()}
