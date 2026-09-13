@@ -490,7 +490,10 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
                     rel="noreferrer"
                     className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
-
+                    <Phone className="w-4 h-4 fill-white" />
+                    <span>Solicitar Orçamento</span>
+                  </a>
+                </div>
 
                 {/* Highly Refined Feature Grid (Apple Style: No side borders, flat layout, ample breathing room) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 pt-16 border-t border-neutral-100 max-w-3xl mx-auto" id="hero-features">
@@ -521,146 +524,142 @@ export default function PublicSite({ config, onBackToAdmin }: PublicSiteProps) {
               </div>
             </section>
 
-
-                          <div className="pt-6 border-t border-white/10 mt-6 shrink-0 font-medium relative z-10">
-                            <a
-                              href={getWhatsAppLink(
-                                selectedPricingItem
-                                  ? `Olá! Gostaria de agendar o conserto do meu ${selectedPricingItem.deviceModel} (${selectedPricingItem.serviceName}) pelo valor estimado de ${selectedPricingItem.priceEstimate}.`
-                                  : `Olá! Gostaria de solicitar um orçamento personalizado para o meu aparelho que não encontrei na lista do site.`
-                              )}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-98"
-                            >
-                              <Phone className="w-4 h-4 fill-white" />
-                              <span>Aprovar & Agendar Reparo</span>
-                            </a>
-                            <p className="text-[10px] text-neutral-500 text-center mt-3 leading-relaxed font-medium">
-                              O orçamento final é confirmado presencialmente de forma gratuita antes de qualquer execução.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start animate-fade-in">
-                      {/* Brand & Issue Selectors */}
-                      <div className="lg:col-span-7 space-y-8">
-                        {/* Brand Select */}
-                        <div className="space-y-3">
-                          <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block font-mono">
-                            1. Qual a marca do seu aparelho?
-                          </label>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                            {["Apple (iPhone)", "Samsung", "Motorola", "Xiaomi", "Outra Marca"].map((brand) => {
-                              const isSel = diagBrand === brand;
-                              return (
-                                <button
-                                  key={brand}
-                                  type="button"
-                                  onClick={() => setDiagBrand(brand)}
-                                  className={`p-3.5 rounded-xl border text-xs font-bold tracking-tight transition-all text-center cursor-pointer ${
-                                    isSel
-                                      ? "border-neutral-950 bg-neutral-950 text-white font-bold"
-                                      : "border-neutral-200 hover:border-neutral-300 text-neutral-500 bg-white"
-                                  }`}
-                                >
-                                  {brand}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Issue Select */}
-                        <div className="space-y-3">
-                          <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block font-mono">
-                            2. Qual é o principal problema/sintoma?
-                          </label>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            {[
-                              "Tela quebrada ou riscada",
-                              "Bateria viciada ou não carrega",
-                              "Caiu na água (Contato com líquido)",
-                              "Não liga ou trava na logo (Loop infinito)",
-                              "Problema no conector de carga ou botões",
-                              "Câmera embaçada ou sem foco"
-                            ].map((issue) => {
-                              const isSel = diagIssue === issue;
-                              return (
-                                <button
-                                  key={issue}
-                                  type="button"
-                                  onClick={() => setDiagIssue(issue)}
-                                  className={`p-3.5 rounded-xl border text-left text-xs font-bold tracking-tight transition-all cursor-pointer flex items-center justify-between ${
-                                    isSel
-                                      ? "border-neutral-950 bg-neutral-950 text-white font-bold"
-                                      : "border-neutral-200 hover:border-neutral-300 text-neutral-500 bg-white"
-                                  }`}
-                                >
-                                  <span>{issue}</span>
-                                  {isSel && <div className="w-2 h-2 rounded-full bg-emerald-400"></div>}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Diagnostic Advice Display */}
-                      <div className="lg:col-span-5 h-full">
-                        <div className="p-6 rounded-2xl bg-neutral-950 text-white flex flex-col justify-between h-full min-h-[350px] shadow-sm relative overflow-hidden">
-                          {/* Absolute accent inside the dark card */}
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none"></div>
-
-                          <div className="space-y-5 relative z-10">
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider font-mono ${
-                                getDiagnosticAdvice().urgency === "Alerta Urgente"
-                                  ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                                  : getDiagnosticAdvice().urgency === "Manutenção Express"
-                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                  : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                              }`}>
-                                {getDiagnosticAdvice().urgency}
-                              </span>
-                              <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 font-mono">Diagnóstico Virtual</span>
-                            </div>
-
-                            <div className="space-y-3">
-                              <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-mono">Análise Prévia do {diagBrand}</p>
-                              <h4 className="text-base font-extrabold text-white leading-tight">
-                                {getDiagnosticAdvice().title}
-                              </h4>
-                              <p className="text-xs text-neutral-300 leading-relaxed font-medium pt-1">
-                                {getDiagnosticAdvice().desc}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="pt-6 border-t border-white/10 mt-6 shrink-0 font-medium relative z-10">
-                            <a
-                              href={getWhatsAppLink(
-                                `Olá! Usei o Diagnóstico Rápido no site para o meu ${diagBrand} com o sintoma: "${diagIssue}". Gostaria de agendar uma avaliação gratuita sem compromisso!`
-                              )}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-98"
-                            >
-                              <Phone className="w-4 h-4 fill-white" />
-                              <span>Solicitar Avaliação Grátis</span>
-                            </a>
-                            <p className="text-[10px] text-neutral-500 text-center mt-3 leading-relaxed font-medium">
-                              Nossos orçamentos presenciais em Caruaru são 100% gratuitos e levam até 2 horas.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+            {selectedPricingItem ? (
+              <div className="max-w-5xl mx-auto px-6 pt-6">
+                <div className="pt-6 border-t border-white/10 mt-6 shrink-0 font-medium relative z-10">
+                  <a
+                    href={getWhatsAppLink(
+                      `Olá! Gostaria de agendar o conserto do meu ${selectedPricingItem.deviceModel} (${selectedPricingItem.serviceName}) pelo valor estimado de ${selectedPricingItem.priceEstimate}.`
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-98"
+                  >
+                    <Phone className="w-4 h-4 fill-white" />
+                    <span>Aprovar & Agendar Reparo</span>
+                  </a>
+                  <p className="text-[10px] text-neutral-500 text-center mt-3 leading-relaxed font-medium">
+                    O orçamento final é confirmado presencialmente de forma gratuita antes de qualquer execução.
+                  </p>
                 </div>
               </div>
-            </section>
+            ) : (
+              <div className="max-w-5xl mx-auto px-6 pt-10">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start animate-fade-in">
+                  {/* Brand & Issue Selectors */}
+                  <div className="lg:col-span-7 space-y-8">
+                    {/* Brand Select */}
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block font-mono">
+                        1. Qual a marca do seu aparelho?
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {["Apple (iPhone)", "Samsung", "Motorola", "Xiaomi", "Outra Marca"].map((brand) => {
+                          const isSel = diagBrand === brand;
+                          return (
+                            <button
+                              key={brand}
+                              type="button"
+                              onClick={() => setDiagBrand(brand)}
+                              className={`p-3.5 rounded-xl border text-xs font-bold tracking-tight transition-all text-center cursor-pointer ${
+                                isSel
+                                  ? "border-neutral-950 bg-neutral-950 text-white font-bold"
+                                  : "border-neutral-200 hover:border-neutral-300 text-neutral-500 bg-white"
+                              }`}
+                            >
+                              {brand}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Issue Select */}
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block font-mono">
+                        2. Qual é o principal problema/sintoma?
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {[
+                          "Tela quebrada ou riscada",
+                          "Bateria viciada ou não carrega",
+                          "Caiu na água (Contato com líquido)",
+                          "Não liga ou trava na logo (Loop infinito)",
+                          "Problema no conector de carga ou botões",
+                          "Câmera embaçada ou sem foco"
+                        ].map((issue) => {
+                          const isSel = diagIssue === issue;
+                          return (
+                            <button
+                              key={issue}
+                              type="button"
+                              onClick={() => setDiagIssue(issue)}
+                              className={`p-3.5 rounded-xl border text-left text-xs font-bold tracking-tight transition-all cursor-pointer flex items-center justify-between ${
+                                isSel
+                                  ? "border-neutral-950 bg-neutral-950 text-white font-bold"
+                                  : "border-neutral-200 hover:border-neutral-300 text-neutral-500 bg-white"
+                              }`}
+                            >
+                              <span>{issue}</span>
+                              {isSel && <div className="w-2 h-2 rounded-full bg-emerald-400"></div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Diagnostic Advice Display */}
+                  <div className="lg:col-span-5 h-full">
+                    <div className="p-6 rounded-2xl bg-neutral-950 text-white flex flex-col justify-between h-full min-h-[350px] shadow-sm relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none"></div>
+
+                      <div className="space-y-5 relative z-10">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider font-mono ${
+                            getDiagnosticAdvice().urgency === "Alerta Urgente"
+                              ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                              : getDiagnosticAdvice().urgency === "Manutenção Express"
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                              : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                          }`}>
+                            {getDiagnosticAdvice().urgency}
+                          </span>
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 font-mono">Diagnóstico Virtual</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-mono">Análise Prévia do {diagBrand}</p>
+                          <h4 className="text-base font-extrabold text-white leading-tight">
+                            {getDiagnosticAdvice().title}
+                          </h4>
+                          <p className="text-xs text-neutral-300 leading-relaxed font-medium pt-1">
+                            {getDiagnosticAdvice().desc}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-6 border-t border-white/10 mt-6 shrink-0 font-medium relative z-10">
+                        <a
+                          href={getWhatsAppLink(
+                            `Olá! Usei o Diagnóstico Rápido no site para o meu ${diagBrand} com o sintoma: "${diagIssue}". Gostaria de agendar uma avaliação gratuita sem compromisso!`
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-98"
+                        >
+                          <Phone className="w-4 h-4 fill-white" />
+                          <span>Solicitar Avaliação Grátis</span>
+                        </a>
+                        <p className="text-[10px] text-neutral-500 text-center mt-3 leading-relaxed font-medium">
+                          Nossos orçamentos presenciais em Caruaru são 100% gratuitos e levam até 2 horas.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Sales Funnel: How it works section */}
             <section className="bg-white py-20 border-b border-neutral-100" id="how-it-works-section">
