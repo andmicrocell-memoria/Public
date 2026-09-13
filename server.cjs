@@ -23,58 +23,14 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // server.ts
 var import_express = __toESM(require("express"), 1);
-var import_path2 = __toESM(require("path"), 1);
+var import_path = __toESM(require("path"), 1);
 var import_vite = require("vite");
 var import_genai = require("@google/genai");
-var import_fs2 = __toESM(require("fs"), 1);
-var import_app = require("firebase/app");
-
-// src/env.ts
-var import_fs = __toESM(require("fs"), 1);
-var import_path = __toESM(require("path"), 1);
 var import_dotenv = __toESM(require("dotenv"), 1);
-function loadRuntimeEnv() {
-  const envFiles = [
-    import_path.default.resolve(process.cwd(), ".env.local"),
-    import_path.default.resolve(process.cwd(), ".env")
-  ];
-  for (const envFile of envFiles) {
-    if (import_fs.default.existsSync(envFile)) {
-      import_dotenv.default.config({ path: envFile, override: false });
-    }
-  }
-  return process.env;
-}
-
-// server.ts
+var import_fs = __toESM(require("fs"), 1);
+var import_app = require("firebase/app");
 var import_firestore = require("firebase/firestore");
-
-// src/audio-transcription.ts
-function normalizeAudioBase64(audioBase64) {
-  if (!audioBase64) return "";
-  const withoutPrefix = audioBase64.replace(/^data:audio\/[a-zA-Z0-9.-]+(?:;[a-zA-Z0-9.-=]+)*;base64,/, "");
-  return withoutPrefix.replace(/^data:audio\/[a-zA-Z0-9.-]+;base64,/, "");
-}
-function normalizeMimeType(mimeType) {
-  if (!mimeType) return "audio/webm";
-  const normalized = mimeType.split(";")[0].trim().toLowerCase();
-  if (normalized === "audio/opus" || normalized === "audio/oga" || normalized === "application/ogg" || normalized === "video/ogg") {
-    return "audio/ogg";
-  }
-  if (normalized === "audio/x-m4a" || normalized === "audio/m4a") {
-    return "audio/mp4";
-  }
-  if (normalized === "audio/mpeg") {
-    return "audio/mp3";
-  }
-  if (normalized.startsWith("audio/")) {
-    return normalized;
-  }
-  return "audio/webm";
-}
-
-// server.ts
-loadRuntimeEnv();
+import_dotenv.default.config();
 process.on("uncaughtException", (err) => {
   console.error(" [FATAL] Uncaught Exception absorvida pelo servidor:", err);
 });
@@ -86,6 +42,7 @@ var resolvedDirname = typeof __dirname !== "undefined" ? __dirname : process.cwd
 var webhookLogs = [
   { id: "init-log-1", timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR"), direction: "system", message: "Sistema de Webhook Oficial Inicializado", details: "Aguardando requisi\xE7\xF5es do Meta Developer Portal" }
 ];
+var botSentMessageIds = /* @__PURE__ */ new Set();
 var addWebhookLog = (direction, message, details) => {
   const newLog = {
     id: `wlog-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -104,19 +61,19 @@ var addWebhookLog = (direction, message, details) => {
     });
   }
 };
-var configDir = import_path2.default.join(process.cwd(), "data");
-var configFilePath = import_path2.default.join(configDir, "config.json");
-var postsFilePath = import_path2.default.join(configDir, "posts.json");
+var configDir = import_path.default.join(process.cwd(), "data");
+var configFilePath = import_path.default.join(configDir, "config.json");
+var postsFilePath = import_path.default.join(configDir, "posts.json");
 function ensureConfigDir() {
-  if (!import_fs2.default.existsSync(configDir)) {
-    import_fs2.default.mkdirSync(configDir, { recursive: true });
+  if (!import_fs.default.existsSync(configDir)) {
+    import_fs.default.mkdirSync(configDir, { recursive: true });
   }
 }
 function loadStoredPosts() {
   ensureConfigDir();
-  if (import_fs2.default.existsSync(postsFilePath)) {
+  if (import_fs.default.existsSync(postsFilePath)) {
     try {
-      return JSON.parse(import_fs2.default.readFileSync(postsFilePath, "utf8"));
+      return JSON.parse(import_fs.default.readFileSync(postsFilePath, "utf8"));
     } catch (e) {
       console.error("Error reading posts file:", e);
     }
@@ -126,16 +83,16 @@ function loadStoredPosts() {
 function saveStoredPosts(posts) {
   ensureConfigDir();
   try {
-    import_fs2.default.writeFileSync(postsFilePath, JSON.stringify(posts, null, 2), "utf8");
+    import_fs.default.writeFileSync(postsFilePath, JSON.stringify(posts, null, 2), "utf8");
   } catch (e) {
     console.error("Error writing posts file:", e);
   }
 }
 function loadStoredConfig() {
   ensureConfigDir();
-  if (import_fs2.default.existsSync(configFilePath)) {
+  if (import_fs.default.existsSync(configFilePath)) {
     try {
-      return JSON.parse(import_fs2.default.readFileSync(configFilePath, "utf8"));
+      return JSON.parse(import_fs.default.readFileSync(configFilePath, "utf8"));
     } catch (e) {
       console.error("Error reading config file:", e);
     }
@@ -145,96 +102,18 @@ function loadStoredConfig() {
 function saveStoredConfig(config) {
   ensureConfigDir();
   try {
-    import_fs2.default.writeFileSync(configFilePath, JSON.stringify(config, null, 2), "utf8");
+    import_fs.default.writeFileSync(configFilePath, JSON.stringify(config, null, 2), "utf8");
   } catch (e) {
     console.error("Error writing config file:", e);
   }
 }
-function sanitizeBotFileName(value) {
-  return (value || "bot").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "bot";
-}
-function salvarConfiguracaoBotTool(args) {
-  const nomeBot = String(args?.nomeBot || "bot").trim();
-  const portaNumero = Number(args?.porta);
-  const status = String(args?.status || "ativo").trim().toLowerCase();
-  if (!nomeBot) {
-    throw new Error("nomeBot \xE9 obrigat\xF3rio.");
-  }
-  if (!Number.isFinite(portaNumero) || portaNumero <= 0 || portaNumero > 65535) {
-    throw new Error("porta inv\xE1lida. Use um n\xFAmero entre 1 e 65535.");
-  }
-  ensureConfigDir();
-  const safeBotName = sanitizeBotFileName(nomeBot);
-  const botConfigPath = import_path2.default.join(configDir, `config_${safeBotName}.json`);
-  const payload = {
-    nomeBot,
-    porta: portaNumero,
-    status,
-    modificadoEm: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  import_fs2.default.writeFileSync(botConfigPath, JSON.stringify(payload, null, 2), "utf8");
-  return {
-    sucesso: true,
-    arquivo: import_path2.default.relative(process.cwd(), botConfigPath).replaceAll("\\", "/"),
-    configuracao: payload
-  };
-}
-function alterarTelefoneSiteTool(args) {
-  const novoTelefone = String(args?.novoTelefone || "").trim();
-  if (!novoTelefone) {
-    throw new Error("novoTelefone \xE9 obrigat\xF3rio.");
-  }
-  ensureConfigDir();
-  const siteConfigPath = import_path2.default.join(configDir, "site_config.json");
-  const payload = {
-    telefone: novoTelefone,
-    modificadoEm: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  import_fs2.default.writeFileSync(siteConfigPath, JSON.stringify(payload, null, 2), "utf8");
-  return {
-    sucesso: true,
-    mensagem: `Telefone do site alterado para ${novoTelefone}!`,
-    arquivo: import_path2.default.relative(process.cwd(), siteConfigPath).replaceAll("\\", "/"),
-    configuracao: payload
-  };
-}
-var painelFunctionDeclarations = [
-  {
-    name: "salvarConfiguracaoBot",
-    description: "Cria ou atualiza o arquivo JSON de configura\xE7\xE3o de um rob\xF4 na pasta data.",
-    parameters: {
-      type: import_genai.Type.OBJECT,
-      properties: {
-        nomeBot: { type: import_genai.Type.STRING, description: "Nome do rob\xF4, por exemplo Atendimento_Vendas." },
-        porta: { type: import_genai.Type.NUMBER, description: "Porta de execu\xE7\xE3o do rob\xF4, por exemplo 8080." },
-        status: { type: import_genai.Type.STRING, description: "Status do rob\xF4: ativo ou inativo." }
-      },
-      required: ["nomeBot", "porta", "status"]
-    }
-  },
-  {
-    name: "alterarTelefoneSite",
-    description: "Atualiza o telefone do site no arquivo data/site_config.json.",
-    parameters: {
-      type: import_genai.Type.OBJECT,
-      properties: {
-        novoTelefone: { type: import_genai.Type.STRING, description: "Novo telefone exibido no site." }
-      },
-      required: ["novoTelefone"]
-    }
-  }
-];
-var painelToolHandlers = {
-  salvarConfiguracaoBot: salvarConfiguracaoBotTool,
-  alterarTelefoneSite: alterarTelefoneSiteTool
-};
 var db = null;
 try {
   let firebaseConfig = null;
-  const firebaseConfigPath = import_path2.default.join(process.cwd(), "firebase-applet-config.json");
-  if (import_fs2.default.existsSync(firebaseConfigPath)) {
+  const firebaseConfigPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
+  if (import_fs.default.existsSync(firebaseConfigPath)) {
     try {
-      firebaseConfig = JSON.parse(import_fs2.default.readFileSync(firebaseConfigPath, "utf8"));
+      firebaseConfig = JSON.parse(import_fs.default.readFileSync(firebaseConfigPath, "utf8"));
       console.log("Firebase config loaded successfully from firebase-applet-config.json");
     } catch (parseErr) {
       console.error("Failed to parse firebase-applet-config.json:", parseErr.message);
@@ -277,9 +156,6 @@ try {
 }
 async function getFirebaseConfig() {
   const localConfig = loadStoredConfig() || {};
-  const normalizeRuntimeMode = (value) => {
-    return value === "customer_support" ? "customer_support" : "operations_internal";
-  };
   if (db) {
     try {
       const configDocRef = (0, import_firestore.doc)(db, "config", "business");
@@ -290,29 +166,21 @@ async function getFirebaseConfig() {
           ...localConfig,
           ...firestoreData,
           chatwootApiAccessToken: (firestoreData.chatwootApiAccessToken || localConfig.chatwootApiAccessToken || "Q1DpLpBXSGYWVP7VGunkEkwL").trim(),
-          chatwootUrl: (firestoreData.chatwootUrl || localConfig.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim(),
-          aiRuntimeMode: normalizeRuntimeMode(firestoreData.aiRuntimeMode || localConfig.aiRuntimeMode)
+          chatwootUrl: (firestoreData.chatwootUrl || localConfig.chatwootUrl || "https://atendimento.andmicrocell.com.br").trim()
         };
       }
     } catch (e) {
       console.error("Error reading config from Firestore:", e.message);
     }
   }
-  return {
-    ...localConfig,
-    aiRuntimeMode: normalizeRuntimeMode(localConfig.aiRuntimeMode)
-  };
+  return localConfig;
 }
 async function saveFirebaseConfig(config) {
-  const normalizedConfig = {
-    ...config || {},
-    aiRuntimeMode: config?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal"
-  };
-  saveStoredConfig(normalizedConfig);
+  saveStoredConfig(config);
   if (db) {
     try {
       const configDocRef = (0, import_firestore.doc)(db, "config", "business");
-      await (0, import_firestore.setDoc)(configDocRef, normalizedConfig);
+      await (0, import_firestore.setDoc)(configDocRef, config);
       console.log("Config saved to Firestore successfully!");
     } catch (e) {
       console.error("Error saving config to Firestore:", e.message);
@@ -480,8 +348,8 @@ async function getWhatsAppHistory(fromNumber) {
         const messages = snapshot.data().messages || [];
         try {
           ensureConfigDir();
-          const historyFilePath = import_path2.default.join(configDir, `history_${cleanNumber}.json`);
-          import_fs2.default.writeFileSync(historyFilePath, JSON.stringify({ messages }, null, 2), "utf8");
+          const historyFilePath = import_path.default.join(configDir, `history_${cleanNumber}.json`);
+          import_fs.default.writeFileSync(historyFilePath, JSON.stringify({ messages }, null, 2), "utf8");
         } catch (e) {
         }
         inMemoryHistoryCache[cleanNumber] = messages;
@@ -493,9 +361,9 @@ async function getWhatsAppHistory(fromNumber) {
   }
   try {
     ensureConfigDir();
-    const historyFilePath = import_path2.default.join(configDir, `history_${cleanNumber}.json`);
-    if (import_fs2.default.existsSync(historyFilePath)) {
-      const fileData = JSON.parse(import_fs2.default.readFileSync(historyFilePath, "utf8"));
+    const historyFilePath = import_path.default.join(configDir, `history_${cleanNumber}.json`);
+    if (import_fs.default.existsSync(historyFilePath)) {
+      const fileData = JSON.parse(import_fs.default.readFileSync(historyFilePath, "utf8"));
       const messages = fileData.messages || [];
       inMemoryHistoryCache[cleanNumber] = messages;
       return messages;
@@ -527,20 +395,97 @@ async function saveWhatsAppHistory(fromNumber, messages, customerName) {
   }
   try {
     ensureConfigDir();
-    const historyFilePath = import_path2.default.join(configDir, `history_${cleanNumber}.json`);
+    const historyFilePath = import_path.default.join(configDir, `history_${cleanNumber}.json`);
     let existingData = {};
-    if (import_fs2.default.existsSync(historyFilePath)) {
+    if (import_fs.default.existsSync(historyFilePath)) {
       try {
-        existingData = JSON.parse(import_fs2.default.readFileSync(historyFilePath, "utf8"));
+        existingData = JSON.parse(import_fs.default.readFileSync(historyFilePath, "utf8"));
       } catch (e) {
       }
     }
     const mergedLocal = { ...existingData, ...docData };
-    import_fs2.default.writeFileSync(historyFilePath, JSON.stringify(mergedLocal, null, 2), "utf8");
+    import_fs.default.writeFileSync(historyFilePath, JSON.stringify(mergedLocal, null, 2), "utf8");
   } catch (fileErr) {
     console.error(`Error writing local backup history file for ${cleanNumber}:`, fileErr.message);
   }
   inMemoryHistoryCache[cleanNumber] = sliced;
+}
+function checkAutomatedSpam(customerName, text, fromNumber) {
+  const nameLower = String(customerName || "").toLowerCase().trim();
+  const textLower = String(text || "").toLowerCase().trim();
+  const phone = String(fromNumber || "").replace(/\D/g, "");
+  const automatedKeywords = [
+    "serasa",
+    "celpe",
+    "compesa",
+    "neoenergia",
+    "spc brasil",
+    "spc",
+    "mercadolivre",
+    "mercado livre",
+    "mercadopago",
+    "mercado pago",
+    "nubank",
+    "bradesco",
+    "itau",
+    "ita\xFA",
+    "santander",
+    "caixa economica",
+    "banco do brasil",
+    "banco",
+    "claro",
+    "vivo",
+    "tim",
+    "oi",
+    "coelba",
+    "enel",
+    "sabesp",
+    "copasa",
+    "sanepar",
+    "embasa",
+    "cagece",
+    "saneago",
+    "corsan",
+    "cedae",
+    "light",
+    "ampla",
+    "energisa",
+    "elektro",
+    "cpfl",
+    "edp",
+    "neoenergia celpe",
+    "serasa experian",
+    "serasa consumidor",
+    "atendimento autom\xE1tico",
+    "sistema",
+    "notifica\xE7\xE3o",
+    "notificacao"
+  ];
+  for (const kw of automatedKeywords) {
+    if (nameLower === kw || nameLower.includes(` ${kw}`) || nameLower.includes(`${kw} `) || nameLower.startsWith(kw) || nameLower.endsWith(kw)) {
+      return { isSpam: true, reason: `Nome do remetente cont\xE9m palavra de sistema automatizado ("${kw}")` };
+    }
+  }
+  if (/c[oó]digo de verifica[cç][aã]o/i.test(textLower) || /c[oó]digo de confirma[cç][aã]o/i.test(textLower) || /c[oó]digo de seguran[cç]a/i.test(textLower) || /token de seguran[cç]a/i.test(textLower) || /seu c[oó]digo/i.test(textLower) || /seu token/i.test(textLower) || /use o c[oó]digo/i.test(textLower) || /verification code/i.test(textLower) || /seu pin/i.test(textLower) || /c[oó]digo de acesso/i.test(textLower)) {
+    return { isSpam: true, reason: "Mensagem parece ser um c\xF3digo de verifica\xE7\xE3o/seguran\xE7a automatizado (OTP)" };
+  }
+  if (textLower.includes("serasa limpa nome") || textLower.includes("serasa experian") || textLower.includes("serasa score") || textLower.includes("serasa consumidor")) {
+    return { isSpam: true, reason: "Mensagem do Serasa" };
+  }
+  const utilityTerms = ["celpe", "compesa", "neoenergia", "fatura", "boleto", "segunda via", "vencimento", "d\xE9bito", "debito", "c\xF3digo de barras", "codigo de barras", "pix copia e cola", "pix copia e cola", "sua conta", "fatura digital"];
+  const paymentActions = ["venceu", "vencer\xE1", "vencendo", "pagamento", "quita\xE7\xE3o", "atraso", "negociar", "desconto", "regularizar", "pend\xEAncia", "pendencia", "aviso", "notifica\xE7\xE3o", "notificacao", "notificamos"];
+  const hasUtility = utilityTerms.some((term) => textLower.includes(term));
+  const hasAction = paymentActions.some((action) => textLower.includes(action));
+  if (hasUtility && hasAction && (textLower.includes("serasa") || textLower.includes("celpe") || textLower.includes("compesa") || textLower.includes("neoenergia") || textLower.includes("notificamos") || textLower.includes("prezado cliente") || textLower.includes("prezada cliente") || textLower.includes("prezado(a) cliente") || textLower.includes("identificamos que") || textLower.includes("evite a suspens\xE3o") || textLower.includes("suspens\xE3o do fornecimento") || /debito(s)? pendente(s)?/i.test(textLower) || /fatura(s)? em atraso/i.test(textLower) || textLower.includes("corte de energia") || textLower.includes("corte de \xE1gua"))) {
+    return { isSpam: true, reason: "Mensagem identificada como aviso de cobran\xE7a ou fatura automatizada de utilidade p\xFAblica" };
+  }
+  if (phone && phone.length >= 4 && phone.length <= 6) {
+    return { isSpam: true, reason: `N\xFAmero de telefone curto ("${fromNumber}"), caracter\xEDstico de SMS/WhatsApp corporativo de massa` };
+  }
+  if (textLower.includes("op\xE7\xE3o inv\xE1lida") || textLower.includes("opcao invalida") || textLower.includes("digite uma op\xE7\xE3o") || textLower.includes("digite uma opcao") || textLower.includes("selecione uma op\xE7\xE3o") || textLower.includes("selecione uma opcao") || textLower.includes("escolha uma das op\xE7\xF5es") || textLower.includes("escolha uma das opcoes") || textLower.includes("ol\xE1! eu sou") && (textLower.includes("assistente") || textLower.includes("rob\xF4") || textLower.includes("robo")) || textLower.includes("ol\xE1") && textLower.includes("sou o") && (textLower.includes("atendente virtual") || textLower.includes("assistente virtual"))) {
+    return { isSpam: true, reason: "Mensagem cont\xE9m gatilhos t\xEDpicos de autoatendimento/outro rob\xF4 (risco de loop infinito)" };
+  }
+  return null;
 }
 function getStaticGreetingResponse(messageText, historyLength) {
   if (!messageText) return null;
@@ -651,13 +596,9 @@ async function startServer() {
   let ai = null;
   const getGeminiClient = () => {
     if (!ai) {
-      const apiKey = [
-        process.env.GEMINI_API_KEY,
-        process.env.GOOGLE_API_KEY,
-        process.env.VITE_GEMINI_API_KEY
-      ].find((key) => typeof key === "string" && key.trim() && key !== "MY_GEMINI_API_KEY");
-      if (!apiKey) {
-        throw new Error("GEMINI_API_KEY/GOOGLE_API_KEY environment variable is not configured.");
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+        throw new Error("GEMINI_API_KEY environment variable is not configured.");
       }
       ai = new import_genai.GoogleGenAI({
         apiKey,
@@ -739,6 +680,21 @@ async function startServer() {
     }
     return { isOpen, statusMessage };
   };
+  const getBrazilianPhoneVariations = (phone) => {
+    const clean = String(phone).replace(/\D/g, "");
+    const variations = [clean];
+    if (clean.startsWith("55") && (clean.length === 12 || clean.length === 13)) {
+      const ddd = clean.substring(2, 4);
+      if (clean.length === 13 && clean.charAt(4) === "9") {
+        const without9 = "55" + ddd + clean.substring(5);
+        variations.push(without9);
+      } else if (clean.length === 12) {
+        const with9 = "55" + ddd + "9" + clean.substring(4);
+        variations.push(with9);
+      }
+    }
+    return variations;
+  };
   const buildSystemInstruction = (config) => {
     const { name, category, address, phone, businessHours, specialOffers, tone, faqs, pricingTable } = config;
     let faqText = faqs && faqs.length > 0 ? faqs.map((f) => `P: ${f.question}
@@ -818,8 +774,9 @@ PORTF\xD3LIO DE SERVI\xC7OS, REGRAS DE POSICIONAMENTO COMERCIAL E DIRETRIZES DE 
 
 2. TIPOS DE REPARO E LIMITA\xC7\xD5ES T\xC9CNICAS:
    - Celulares e iPhones (iOS / Android): Realizamos reparos avan\xE7ados em placas eletr\xF4nicas por micro-soldagem.
-   - Notebooks e Computadores (Desktops): N\xC3O realizamos reparos avan\xE7ados em placas-m\xE3e por raz\xF5es t\xE9cnicas. Nossos reparos eletr\xF4nicos de placa s\xE3o voltados \xFAnica e exclusivamente para a linha de celulares.
+   - Notebooks e Computadores (Desktops): N\xC3O realizamos reparos avan\xE7ados em placas-m\xE3e por raz\xF5es t\xE9cnicas (como soldar componentes internos da placa que queimaram). Nossos reparos eletr\xF4nicos avan\xE7ados de placa de n\xEDvel de componente s\xE3o voltados \xFAnica e exclusivamente para a linha de celulares.
    - Servi\xE7os autorizados/permitidos em placas de notebooks/PCs: Troca de entrada de carga / conector DC Jack, regrava\xE7\xE3o de EPROM (BIOS) e outros reparos de componentes perif\xE9ricos/b\xE1sicos de hardware.
+   - IMPORTANTE (Diferen\xE7a entre reparo e upgrade/substitui\xE7\xE3o): N\xF3s N\xC3O reparamos os componentes internos de uma placa-m\xE3e de notebook/PC que queimaram, mas FAZEMOS a substitui\xE7\xE3o completa de placas-m\xE3e, instala\xE7\xE3o de placas novas, upgrade de pe\xE7as e instala\xE7\xE3o de kits upgrade (processador, placa-m\xE3e, mem\xF3ria RAM). Se o cliente quer instalar um kit upgrade ou trocar a placa-m\xE3e dele por uma nova, n\xF3s FAZEMOS esse servi\xE7o com total maestria! Somos uma assist\xEAncia t\xE9cnica e este servi\xE7o faz parte da nossa especialidade.
 
 3. REGRA DE IDENTIFICA\xC7\xC3O DE DEFEITO DE PLACA (TRIAGEM DA IA):
    - Como a IA identifica se \xE9 problema de placa?
@@ -830,6 +787,9 @@ PORTF\xD3LIO DE SERVI\xC7OS, REGRAS DE POSICIONAMENTO COMERCIAL E DIRETRIZES DE 
 4. LINHA GAMER E COMPUTADORES/NOTEBOOKS:
    - Somos altamente especialistas em Linha Gamer: fazemos manuten\xE7\xE3o preventiva e corretiva completa para PCs e Notebooks Gamer (desmontagem, limpeza, troca de pasta t\xE9rmica de prata, etc.).
    - Software para PCs/Notebooks: Realizamos formata\xE7\xE3o, reinstala\xE7\xE3o de sistema e instala\xE7\xE3o de programas de forma profissional.
+   - Instala\xE7\xE3o e Upgrade de Hardware (MUITO IMPORTANTE):
+     * N\xF3s FAZEMOS a instala\xE7\xE3o e montagem de kits upgrade (processador, placa-m\xE3e, mem\xF3ria, etc.) em computadores e notebooks. Somos uma assist\xEAncia t\xE9cnica e realizamos a montagem/instala\xE7\xE3o completa desse kit para o cliente de forma profissional.
+     * Sobre a venda de kits upgrade: N\xF3s n\xE3o trabalhamos com estoque direto de kits upgrade, mas temos total viabilidade de cotar e vender o kit para o cliente sob encomenda se ele desejar. Se ele mandar um link de um kit ou perguntar sobre, diga que fazemos a instala\xE7\xE3o completa e que tamb\xE9m temos a viabilidade de cotar e vender o kit sob encomenda!
 
 5. SERVI\xC7OS DE SOFTWARE PARA CELULARES:
    - Servi\xE7os Permitidos:
@@ -921,141 +881,9 @@ Que tal trazer o aparelho aqui na loja para fazermos uma avalia\xE7\xE3o gratuit
      * NUNCA d\xEA a entender que o atendimento presencial ou final est\xE1 ativo agora se estiver FECHADA. Deixe bem n\xEDtido que a loja est\xE1 fechada, mas que o assistente virtual (voc\xEA) resolve tudo por aqui e deixa engatilhado para os t\xE9cnicos.
     - Se o status indicar que a loja est\xE1 "ABERTA":
       * Siga com o atendimento normal de expediente comercial.
-8. Honestidade e Seguran\xE7a: NUNCA invente informa\xE7\xF5es sobre pre\xE7os, servi\xE7os ou pol\xEDticas que n\xE3o estejam descritas acima. Se n\xE3o souber a resposta ou se o cliente fizer uma pergunta muito espec\xEDfica de pre\xE7o que n\xE3o conste na tabela de pre\xE7os nem na base de conhecimento, explique de forma amig\xE1vel e profissional que n\xE3o tem o valor exato no sistema e convide-o calorosamente a trazer para uma avalia\xE7\xE3o gratuita na loja ou pe\xE7a para ele aguardar um momento que um atendente humano ir\xE1 assumir o atendimento para dar todos os detalhes.
+8. Honestidade e Seguran\xE7a: NUNCA invente informa\xE7\xF5es sobre pre\xE7os, servi\xE7os, pol\xEDticas, ponto de refer\xEAncia, bairro ou localiza\xE7\xE3o f\xEDsica que n\xE3o estejam descritas de forma clara. Se o cliente perguntar onde fica ou qual o endere\xE7o completo, responda EXCLUSIVAMENTE com o endere\xE7o f\xEDsico oficial fornecido ("Travessa das Flores, 167, Salgado - Caruaru - PE"). NUNCA invente outras avenidas, bairros ou pontos de refer\xEAncia (por exemplo, NUNCA diga que fica no "Alto do Moura" ou na "Avenida Agamenon Magalh\xE3es" ou "Maur\xEDcio de Nassau"). Se o cliente perguntar ou mencionar "\xE9 no Alto do Moura?" ou outra refer\xEAncia que n\xE3o seja Travessa das Flores, responda educadamente desmentindo ou esclarecendo que n\xE3o fica l\xE1, e informe o endere\xE7o oficial ("Travessa das Flores, 167, Salgado - Caruaru - PE") de forma completa. Se n\xE3o souber responder alguma outra d\xFAvida, explique de forma amig\xE1vel que n\xE3o possui essa informa\xE7\xE3o no sistema e convide o cliente a aguardar um momento que um atendente humano ir\xE1 dar mais detalhes.
 9. Responda sempre em Portugu\xEAs do Brasil.
 10. Encerramento Objetivo da Conversa: Quando o cliente se despedir, agradecer ("Obrigado", "Valeu", "Tudo certo", "Entendido", "Tchau", "Boa noite", etc.) ou der sinais claros de que a d\xFAvida foi resolvida e o atendimento se encerrou, responda de forma final, extremamente direta, amig\xE1vel e objetiva. NUNCA fa\xE7a novas perguntas redundantes ("Posso ajudar em algo mais?") ou tente prolongar a conversa desnecessariamente. Apenas agrade\xE7a, deseje um excelente dia/noite ou agende um hor\xE1rio para ele trazer o aparelho, e encerre por ali.`;
-  };
-  const buildOperationsSystemInstruction = (config, advancedMode = false) => {
-    const { name, category, phone, businessHours, address, specialOffers } = config || {};
-    return `Voc\xEA \xE9 a Agente Operacional da empresa ${name || "AndMicrocell"}, com perfil de execu\xE7\xE3o estrat\xE9gica e melhoria cont\xEDnua.
-
-  Objetivo:
-  - Atuar como assistente de opera\xE7\xE3o, gest\xE3o e tomada de decis\xE3o.
-  - Responder para o time interno (n\xE3o para clientes finais).
-  - Transformar pedidos simples do operador em plano de a\xE7\xE3o claro e execut\xE1vel.
-
-  Contexto da empresa:
-  - Segmento: ${category || "assist\xEAncia t\xE9cnica"}
-  - Telefone principal: ${phone || "n\xE3o informado"}
-  - Hor\xE1rio comercial: ${businessHours || "n\xE3o informado"}
-  - Endere\xE7o: ${address || "n\xE3o informado"}
-  - Ofertas atuais: ${specialOffers || "n\xE3o informado"}
-
-  Diretrizes de resposta:
-  1. Use Portugu\xEAs do Brasil.
-  2. Entenda comandos em linguagem simples e informal, sem exigir termos t\xE9cnicos.
-  3. Converse de forma natural (como um operador experiente), sem respostas rob\xF3ticas ou repetitivas.
-  4. Nunca responder como atendimento ao cliente; o foco \xE9 opera\xE7\xE3o interna.
-  5. Evite loop: n\xE3o repetir frases de abertura como "Agente IA online" ou equivalentes.
-  6. Em integra\xE7\xF5es, considerar as camadas Meta API -> Chatwoot -> Backend -> Gemini.
-  7. Em melhorias de site, incluir pelo menos 1 ganho t\xE9cnico e 1 ganho comercial.
-  8. Finalize com uma pr\xF3xima a\xE7\xE3o objetiva.
-  9. Comandos de estilo (quando o usu\xE1rio come\xE7ar a mensagem com):
-    - @rapido: resposta ultra curta e direta (3 linhas).
-    - @executor: resposta objetiva com execu\xE7\xE3o pr\xE1tica (5 linhas).
-    - @detalhado: resposta completa e estruturada (at\xE9 8 linhas).
-  10. ${advancedMode ? "Modo inteligente ativo: aprofunde diagn\xF3stico, proponha alternativas, trade-offs e plano em fases quando fizer sentido." : "Modo executor ativo: priorize a\xE7\xE3o imediata e clareza operacional."}
-  `;
-  };
-  const detectOpsStyle = (rawText) => {
-    const text = (rawText || "").trim();
-    const lower = text.toLowerCase();
-    if (lower.startsWith("@rapido")) {
-      return { style: "rapido", cleanText: text.replace(/^@rapido\s*/i, "").trim() };
-    }
-    if (lower.startsWith("@detalhado")) {
-      return { style: "detalhado", cleanText: text.replace(/^@detalhado\s*/i, "").trim() };
-    }
-    if (lower.startsWith("@executor")) {
-      return { style: "executor", cleanText: text.replace(/^@executor\s*/i, "").trim() };
-    }
-    return { style: "executor", cleanText: text };
-  };
-  const compactOperationsReply = (rawText, style = "executor") => {
-    const cleaned = (rawText || "").replace(/\*\*/g, "").replace(/^\s*[-*]\s+/gm, "").replace(/\r/g, "").trim();
-    if (!cleaned) {
-      return "Recebi sua solicita\xE7\xE3o. Descreva objetivo e contexto em 1 frase para eu te devolver um plano acion\xE1vel.";
-    }
-    const lineLimit = style === "rapido" ? 5 : style === "detalhado" ? 14 : 9;
-    const condensed = cleaned.split("\n").map((line) => line.trim()).filter(Boolean).slice(0, lineLimit).join("\n");
-    const safeText = condensed.replace(/atendimento ao cliente/gi, "opera\xE7\xE3o interna").replace(/cliente final/gi, "opera\xE7\xE3o interna").replace(/suporte ao cliente/gi, "suporte operacional");
-    const maxChars = style === "rapido" ? 700 : style === "detalhado" ? 2600 : 1700;
-    return safeText.length > maxChars ? `${safeText.slice(0, maxChars)}...` : safeText;
-  };
-  const isLoopLikeReply = (reply, lastAi, lastUser) => {
-    const r = (reply || "").toLowerCase().trim();
-    const a = (lastAi || "").toLowerCase().trim();
-    if (!r) return true;
-    const genericStarts = [
-      "agente ia online",
-      "situa\xE7\xE3o:",
-      "acao recomendada:",
-      "a\xE7\xE3o recomendada:",
-      "pedido operacional identificado"
-    ];
-    const startsGeneric = genericStarts.some((s) => r.startsWith(s));
-    const tooSimilar = a && (r === a || r.length > 40 && (r.includes(a) || a.includes(r)));
-    return startsGeneric || tooSimilar;
-  };
-  const buildDirectOpsReply = (lastUserMessage, style = "executor") => {
-    const msg = (lastUserMessage || "").trim();
-    if (style === "rapido") {
-      return `Plano r\xE1pido: vou atacar ${msg || "essa tarefa"} agora.
-Execu\xE7\xE3o: corrigir origem e validar ponta a ponta.
-Me diga o resultado final esperado em 1 frase.`;
-    }
-    if (style === "detalhado") {
-      return `Plano de execu\xE7\xE3o para ${msg || "essa tarefa"}:
-1) Diagn\xF3stico da causa raiz e hip\xF3teses.
-2) Corre\xE7\xE3o com menor risco de regress\xE3o.
-3) Valida\xE7\xE3o funcional ponta a ponta e monitoramento.
-Crit\xE9rio de sucesso: sem erro, sem loop e com resposta consistente.
-Me passe ambiente e prioridade para detalhar as a\xE7\xF5es por etapa.`;
-    }
-    return `Execu\xE7\xE3o proposta para ${msg || "essa tarefa"}:
-- validar causa
-- aplicar ajuste
-- testar fluxo completo
-Se quiser, j\xE1 te devolvo a sequ\xEAncia exata de comandos e checklist.`;
-  };
-  const buildImmediateOpsExecutionReply = (lastUserMessage, style = "executor") => {
-    const q = (lastUserMessage || "").toLowerCase();
-    const hasSite = q.includes("site");
-    const hasBot = q.includes("robo") || q.includes("bot");
-    const hasMeta = q.includes("meta") || q.includes("whatsapp");
-    const hasChatwoot = q.includes("chatwoot");
-    const hasGemini = q.includes("gemini") || q.includes("ia");
-    const hasPanel = q.includes("painel");
-    const foco = [
-      hasPanel ? "painel" : "",
-      hasSite ? "site" : "",
-      hasBot ? "robo" : "",
-      hasMeta ? "meta api" : "",
-      hasChatwoot ? "chatwoot" : "",
-      hasGemini ? "gemini" : ""
-    ].filter(Boolean).join(", ") || "operacao geral";
-    const execRapido = [
-      `Entendido. Foco em ${foco}.`,
-      "Acao agora: validar origem do erro e corrigir.",
-      "Proximo passo: confirme prioridade (rapido/medio/completo)."
-    ].join("\n");
-    const execExecutor = [
-      `Entendido. Vou executar com foco em ${foco}.`,
-      "Acao agora: validar logs, autenticacao e fluxo ponta a ponta.",
-      "Passos: 1) reproduzir, 2) corrigir origem, 3) testar novamente.",
-      "Validacao: sem erro, resposta objetiva e fluxo estavel.",
-      "Proximo passo: me diga prioridade (rapido, medio ou completo)."
-    ].join("\n");
-    const execDetalhado = [
-      `Entendido. Vou executar com foco em ${foco}.`,
-      "Acao: auditar Meta API -> Chatwoot -> Backend -> Gemini para localizar falha raiz.",
-      "Execucao: validar token/webhook, revisar logs, corrigir regra/rota e retestar ponta a ponta.",
-      "Validacao: resposta sem loop, sem truncamento e com estabilidade no fluxo.",
-      "Risco: sem auditoria por camada, o erro reaparece em horarios de pico.",
-      "Proximo passo: informe prioridade e ambiente (producao ou teste)."
-    ].join("\n");
-    const exec = style === "rapido" ? execRapido : style === "detalhado" ? execDetalhado : execExecutor;
-    return exec;
   };
   app.post("/api/agent/transcribe-audio", async (req, res) => {
     try {
@@ -1063,11 +891,7 @@ Se quiser, j\xE1 te devolvo a sequ\xEAncia exata de comandos e checklist.`;
       if (!audioBase64) {
         return res.status(400).json({ error: "Nenhum dado de \xE1udio fornecido." });
       }
-      const cleanBase64 = normalizeAudioBase64(audioBase64);
-      const cleanMimeType = normalizeMimeType(mimeType);
-      if (!cleanBase64) {
-        return res.status(400).json({ error: "O payload de \xE1udio est\xE1 vazio ou inv\xE1lido." });
-      }
+      const cleanBase64 = audioBase64.replace(/^data:audio\/[a-zA-Z0-9.-]+;base64,/, "");
       const client = getGeminiClient();
       const response = await client.models.generateContent({
         model: "gemini-2.5-flash",
@@ -1075,7 +899,7 @@ Se quiser, j\xE1 te devolvo a sequ\xEAncia exata de comandos e checklist.`;
           {
             inlineData: {
               data: cleanBase64,
-              mimeType: cleanMimeType
+              mimeType: mimeType.split(";")[0]
             }
           },
           "Transcreva este \xE1udio em portugu\xEAs brasileiro de forma extremamente limpa, natural e fiel. Retorne APENAS a transcri\xE7\xE3o literal do \xE1udio falado, sem adicionar nenhuma explica\xE7\xE3o, sem aspas, sem prefixos ou coment\xE1rios adicionais."
@@ -1094,137 +918,59 @@ Se quiser, j\xE1 te devolvo a sequ\xEAncia exata de comandos e checklist.`;
       });
     }
   });
-  app.post("/api/chat", async (req, res) => {
-    try {
-      const mensagem = String(req.body?.mensagem || "").trim();
-      if (!mensagem) {
-        return res.status(400).json({ erro: "Mensagem ausente." });
-      }
-      const client = getGeminiClient();
-      const response = await client.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: mensagem,
-        config: {
-          systemInstruction: "Voc\xEA \xE9 um executor do painel. Sempre use as ferramentas para criar ou alterar rob\xF4s e sites. N\xE3o d\xEA explica\xE7\xF5es te\xF3ricas.",
-          tools: [{ functionDeclarations: painelFunctionDeclarations }],
-          toolConfig: {
-            functionCallingConfig: {
-              mode: import_genai.FunctionCallingConfigMode.AUTO
-            }
-          }
-        }
-      });
-      const functionCalls = response.functionCalls || [];
-      if (functionCalls.length > 0) {
-        const call = functionCalls[0];
-        const handler = painelToolHandlers[call.name || ""];
-        if (!handler) {
-          return res.json({ resposta: `[A\xC7\xC3O N\xC3O EXECUTADA]: ferramenta '${call.name}' n\xE3o implementada.` });
-        }
-        const resultado = handler(call.args || {});
-        const mensagemResultado = resultado?.sucesso ? resultado?.mensagem || `Arquivo gerado em ${resultado?.arquivo || "data/"}` : "Falha ao executar a a\xE7\xE3o solicitada.";
-        return res.json({ resposta: `[A\xC7\xC3O EXECUTADA]: ${mensagemResultado}` });
-      }
-      return res.json({ resposta: response.text || "Sem resposta textual." });
-    } catch (error) {
-      return res.status(500).json({ erro: error?.message || "Erro interno no servidor." });
-    }
-  });
   app.post("/api/agent/chat", async (req, res) => {
     try {
-      const { config, messages, mode } = req.body;
-      const runtimeMode = config?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal";
-      const requestedMode = mode === "operations_pro" ? "operations_pro" : mode === "operations" ? "operations" : "customer_support";
-      const normalizedMode = runtimeMode === "operations_internal" ? requestedMode === "operations_pro" ? "operations_pro" : "operations" : requestedMode;
+      const { config, messages } = req.body;
       if (!config) {
         return res.status(400).json({ error: "Configura\xE7\xE3o do agente ausente." });
       }
-      const systemPrompt = normalizedMode === "operations" || normalizedMode === "operations_pro" ? buildOperationsSystemInstruction(config, normalizedMode === "operations_pro") : buildSystemInstruction(config);
-      const rawLastUserMessage = messages[messages.length - 1]?.text || "";
-      const opsStyleConfig = detectOpsStyle(rawLastUserMessage);
-      const lastUserMessage = opsStyleConfig.cleanText || rawLastUserMessage;
-      const opsStyle = opsStyleConfig.style;
-      const lastAiMessage = [...messages].reverse().find((m) => {
-        const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
-        return sender === "agent" || sender === "model";
-      })?.text || "";
-      const contents = messages.slice(-6).map((m, idx, arr) => {
-        const sender = typeof m?.sender === "string" ? m.sender.toLowerCase() : "";
-        const isLastUser = idx === arr.length - 1 && (sender === "customer" || sender === "user");
-        const userText = isLastUser ? lastUserMessage : m.text;
+      const lastUserMessage = messages[messages.length - 1]?.text || "";
+      const historyLength = messages.length - 1;
+      const staticResponse = getStaticGreetingResponse(lastUserMessage, historyLength);
+      if (staticResponse) {
+        return res.json({ text: staticResponse });
+      }
+      const systemPrompt = buildSystemInstruction(config);
+      const contents = messages.slice(-6).map((m) => {
         return {
-          role: sender === "customer" || sender === "user" ? "user" : "model",
-          parts: [{ text: userText }]
+          role: m.sender === "customer" ? "user" : "model",
+          parts: [{ text: m.text }]
         };
       });
       try {
-        const useOpsTools = normalizedMode === "operations" || normalizedMode === "operations_pro";
-        const executionSystemInstruction = useOpsTools ? `Voc\xEA \xE9 um agente executor da AndMicrocell.
-Sua fun\xE7\xE3o \xE9 Chamar Fun\xE7\xF5es (tools) para criar e alterar configura\xE7\xF5es no sistema.
-Se o usu\xE1rio pedir algo que voc\xEA tem ferramenta para fazer, execute imediatamente sem dar explica\xE7\xF5es te\xF3ricas.` : systemPrompt;
         const client = getGeminiClient();
         const response = await client.models.generateContent({
           model: "gemini-2.5-flash",
           contents,
           config: {
-            systemInstruction: executionSystemInstruction,
-            temperature: normalizedMode === "operations_pro" ? 0.75 : normalizedMode === "operations" ? 0.55 : 0.75,
-            maxOutputTokens: normalizedMode === "operations_pro" ? 1200 : normalizedMode === "operations" ? 420 : 900,
-            ...useOpsTools ? {
-              tools: [{ functionDeclarations: painelFunctionDeclarations }],
-              toolConfig: {
-                functionCallingConfig: {
-                  mode: import_genai.FunctionCallingConfigMode.AUTO
-                }
-              }
-            } : {}
+            systemInstruction: systemPrompt,
+            temperature: 0.7
           }
         });
-        const functionCalls = response.functionCalls || [];
-        if (useOpsTools && functionCalls.length > 0) {
-          const executionResults = [];
-          for (const call of functionCalls) {
-            const handler = painelToolHandlers[call.name || ""];
-            if (!handler) {
-              executionResults.push(`Falha: ferramenta '${call.name}' n\xE3o implementada.`);
-              continue;
-            }
-            try {
-              const result = handler(call.args || {});
-              if (result?.sucesso) {
-                executionResults.push(`Executado: ${call.name} -> ${result.arquivo || "ok"}`);
-              } else {
-                executionResults.push(`Falha em ${call.name}: resposta inv\xE1lida.`);
-              }
-            } catch (toolErr) {
-              executionResults.push(`Falha em ${call.name}: ${toolErr?.message || "erro desconhecido"}`);
-            }
-          }
-          const opsReply = executionResults.join("\n");
-          return res.json({ text: opsReply, executedTools: functionCalls.map((c) => c.name) });
-        }
-        const baseReplyText = response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?";
-        let replyText = normalizedMode === "operations" || normalizedMode === "operations_pro" ? compactOperationsReply(baseReplyText, opsStyle) : baseReplyText;
-        if ((normalizedMode === "operations" || normalizedMode === "operations_pro") && isLoopLikeReply(replyText, lastAiMessage, lastUserMessage)) {
-          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage, opsStyle), opsStyle);
-        }
-        if ((normalizedMode === "operations" || normalizedMode === "operations_pro") && (replyText.length < 80 || /->\s*$/.test(replyText) || replyText.endsWith(":"))) {
-          replyText = compactOperationsReply(buildDirectOpsReply(lastUserMessage, opsStyle), opsStyle);
-        }
+        const replyText = response.text || "Desculpe, n\xE3o entendi a sua mensagem. Poderia repetir?";
         return res.json({ text: replyText });
       } catch (geminiError) {
         console.warn("Using fallback response because Gemini API failed or is unconfigured:", geminiError.message);
-        if (normalizedMode === "operations" || normalizedMode === "operations_pro") {
-          return res.json({
-            text: "Nao consegui gerar com Gemini agora. Verifique GEMINI_API_KEY e tente novamente em alguns segundos.",
-            isSimulatedFallback: true,
-            apiKeyNotice: "Configure a GEMINI_API_KEY valida para habilitar respostas reais do Gemini neste painel."
-          });
+        const lastUserMessage2 = messages[messages.length - 1]?.text?.toLowerCase() || "";
+        let fallbackResponse = `Ol\xE1! Sou o assistente virtual da ${config.name}. Como posso ajudar?`;
+        if (lastUserMessage2.includes("horario") || lastUserMessage2.includes("hor\xE1rio") || lastUserMessage2.includes("abre") || lastUserMessage2.includes("fecha")) {
+          fallbackResponse = `Nosso hor\xE1rio de funcionamento \xE9: ${config.businessHours || "de segunda a sexta, das 9h \xE0s 18h"}. Ficamos muito felizes com o seu interesse!`;
+        } else if (lastUserMessage2.includes("endereco") || lastUserMessage2.includes("endere\xE7o") || lastUserMessage2.includes("onde") || lastUserMessage2.includes("localizacao") || lastUserMessage2.includes("localiza\xE7\xE3o")) {
+          fallbackResponse = config.address ? `N\xF3s estamos localizados em: ${config.address}. Venha nos visitar!` : `N\xF3s atuamos principalmente de forma digital ou com entregas diretas!`;
+        } else if (lastUserMessage2.includes("preco") || lastUserMessage2.includes("pre\xE7o") || lastUserMessage2.includes("quanto") || lastUserMessage2.includes("valor")) {
+          fallbackResponse = `Para valores e or\xE7amentos detalhados do nosso segmento de ${config.category}, fale com nossos especialistas! O que exatamente voc\xEA procura?`;
+        } else if (config.faqs && config.faqs.length > 0) {
+          const matchedFaq = config.faqs.find(
+            (f) => lastUserMessage2.includes(f.question.toLowerCase()) || f.question.toLowerCase().split(" ").some((word) => word.length > 4 && lastUserMessage2.includes(word))
+          );
+          if (matchedFaq) {
+            fallbackResponse = matchedFaq.answer;
+          }
         }
         return res.json({
-          text: "Gemini indisponivel no momento. Ajuste a chave e tente novamente para obter resposta real da IA.",
+          text: fallbackResponse,
           isSimulatedFallback: true,
-          apiKeyNotice: "Defina GEMINI_API_KEY no ambiente do servidor para respostas reais do Gemini."
+          apiKeyNotice: "Configure a GEMINI_API_KEY no painel Secrets do AI Studio para obter respostas din\xE2micas em tempo real com IA!"
         });
       }
     } catch (err) {
@@ -1411,12 +1157,12 @@ Coment\xE1rio: "${comment || "Sem coment\xE1rio escrito, apenas atribuiu estrela
   app.get("/privacy", handlePrivacyRequest);
   app.get("/politica", handlePrivacyRequest);
   app.get("/meta-icon.jpg", (req, res) => {
-    const iconPath = import_path2.default.join(process.cwd(), "src", "assets", "images", "andmicrocell_meta_icon_1783827325456.jpg");
+    const iconPath = import_path.default.join(process.cwd(), "src", "assets", "images", "andmicrocell_meta_icon_1783827325456.jpg");
     res.setHeader("Content-Type", "image/jpeg");
     res.sendFile(iconPath);
   });
   app.get("/meta-icon.png", (req, res) => {
-    const iconPath = import_path2.default.join(process.cwd(), "src", "assets", "images", "andmicrocell_meta_icon_png_1783828881971.jpg");
+    const iconPath = import_path.default.join(process.cwd(), "src", "assets", "images", "andmicrocell_meta_icon_png_1783828881971.jpg");
     res.setHeader("Content-Type", "image/png");
     res.sendFile(iconPath);
   });
@@ -1893,15 +1639,15 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
         }
       }
       try {
-        if (import_fs2.default.existsSync(configDir)) {
-          const files = import_fs2.default.readdirSync(configDir);
+        if (import_fs.default.existsSync(configDir)) {
+          const files = import_fs.default.readdirSync(configDir);
           for (const file of files) {
             if (file.startsWith("history_") && file.endsWith(".json")) {
               const cleanNumber = file.replace("history_", "").replace(".json", "");
               if (sessionsMap.has(cleanNumber)) continue;
-              const filePath = import_path2.default.join(configDir, file);
+              const filePath = import_path.default.join(configDir, file);
               try {
-                const fileData = JSON.parse(import_fs2.default.readFileSync(filePath, "utf8"));
+                const fileData = JSON.parse(import_fs.default.readFileSync(filePath, "utf8"));
                 const messages = fileData.messages || [];
                 sessionsMap.set(cleanNumber, {
                   id: `session-${cleanNumber}`,
@@ -2010,6 +1756,42 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
         console.log(`[Chatwoot Webhook] Ignorando evento n\xE3o relacionado a mensagens: ${event}`);
         return res.status(200).send("EVENT_IGNORED");
       }
+      if (messageType === "outgoing") {
+        const rawMessageId2 = body.id ? String(body.id) : null;
+        const chatwootConversationId2 = body.conversation?.id || body.conversation_id;
+        const fromNumber2 = body.conversation?.contact?.phone_number || body.contact?.phone_number || (body.conversation?.contact_inbox?.source_id ? String(body.conversation.contact_inbox.source_id).split("@")[0] : "") || "";
+        const cleanPhone = String(fromNumber2).replace(/\D/g, "");
+        if (rawMessageId2 && botSentMessageIds.has(rawMessageId2)) {
+          console.log(`[Chatwoot Webhook] Mensagem de sa\xEDda ${rawMessageId2} enviada pelo pr\xF3prio rob\xF4. Ignorando silenciosamente.`);
+          botSentMessageIds.delete(rawMessageId2);
+          return res.status(200).send("BOT_REPLY_ACKNOWLEDGED");
+        }
+        console.log(`[Agent Silence] Mensagem de sa\xEDda ${rawMessageId2} para a conversa ${cleanPhone} enviada por agente humano.`);
+        try {
+          const storedConfig = await getFirebaseConfig();
+          const enableSilence = storedConfig?.enableAgentSilence !== false;
+          const durationMinutes = storedConfig?.silenceDurationMinutes || 120;
+          if (enableSilence && cleanPhone) {
+            const silencedUntil = Date.now() + durationMinutes * 6e4;
+            if (db) {
+              const variations = getBrazilianPhoneVariations(cleanPhone);
+              for (const phoneVal of variations) {
+                await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "whatsapp_silence", phoneVal), {
+                  silencedUntil,
+                  silencedAt: Date.now(),
+                  byMessageId: rawMessageId2,
+                  conversationId: chatwootConversationId2 || null
+                });
+              }
+            }
+            const agentName = body.sender?.name || body.user?.name || "Atendente";
+            addWebhookLog("system", `Silenciador de IA Ativado [${durationMinutes}min]`, `Agente humano (${agentName}) respondeu o cliente (${cleanPhone}). O rob\xF4 ficar\xE1 em sil\xEAncio para esta conversa.`);
+          }
+        } catch (err) {
+          console.error("[Agent Silence Error] Erro ao tratar mensagem de agente:", err.message);
+        }
+        return res.status(200).send("AGENT_REPLY_PROCESSED");
+      }
       if (messageType !== "incoming") {
         console.log(`[Chatwoot Webhook] Ignorando mensagem de tipo n\xE3o-incoming (evita loops): ${messageType}`);
         return res.status(200).send("EVENT_IGNORED");
@@ -2020,7 +1802,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
       const chatwootAccountId = body.account?.id || body.account_id;
       const chatwootConversationId = body.conversation?.id || body.conversation_id;
       const customerName = body.sender?.name || body.contact?.name || body.conversation?.contact?.name || "Cliente Chatwoot";
-      const fromNumber = body.contact?.phone_number || body.sender?.phone_number || body.conversation?.contact?.phone_number || `cw-${chatwootConversationId}`;
+      const fromNumber = body.conversation?.contact?.phone_number || body.contact?.phone_number || body.sender?.phone_number || (body.conversation?.contact_inbox?.source_id ? String(body.conversation.contact_inbox.source_id).split("@")[0] : "") || `cw-${chatwootConversationId}`;
       const attachments = [
         ...Array.isArray(body?.attachments) ? body.attachments : [],
         ...Array.isArray(body?.message?.attachments) ? body.message.attachments : [],
@@ -2079,10 +1861,20 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
           console.log("[Chatwoot Webhook] Responder Automaticamente est\xE1 desativado. Ignorando processamento.");
           return;
         }
-        const runtimeMode = storedConfig?.aiRuntimeMode === "customer_support" ? "customer_support" : "operations_internal";
-        if (runtimeMode !== "customer_support") {
-          addWebhookLog("system", `Mensagem do Chatwoot recebida (Modo Interno da IA)`, `A IA est\xE1 em modo interno (opera\xE7\xF5es) e n\xE3o responder\xE1 clientes at\xE9 ativar o modo de atendimento.`);
-          console.log("[Chatwoot Webhook] Runtime mode is operations_internal. Skipping customer auto-reply.");
+        const spamCheck = checkAutomatedSpam(customerName, messageText, fromNumber);
+        if (spamCheck) {
+          console.log(`[Anti-Spam / Loop Prevention] Ignoring message from ${customerName} (${fromNumber}). Reason: ${spamCheck.reason}`);
+          addWebhookLog("system", `Mensagem de ${customerName} ignorada (${fromNumber})`, `O rob\xF4 detectou um sistema automatizado ou padr\xE3o de loop infinito e ignorou a mensagem para evitar loops autom\xE1ticos. Motivo: ${spamCheck.reason}.`);
+          if (messageId && db) {
+            try {
+              await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), {
+                processedAt: (/* @__PURE__ */ new Date()).toISOString(),
+                ignored: true,
+                reason: spamCheck.reason
+              });
+            } catch (e) {
+            }
+          }
           return;
         }
         const mutedPhones = storedConfig.mutedPhones || [];
@@ -2101,6 +1893,46 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
             }
           }
           return;
+        }
+        const enableAgentSilence = storedConfig?.enableAgentSilence !== false;
+        if (enableAgentSilence && db) {
+          try {
+            const cleanFrom = String(fromNumber).replace(/\D/g, "");
+            if (cleanFrom) {
+              const phoneVariations = getBrazilianPhoneVariations(cleanFrom);
+              let isSilenced = false;
+              let silenceData = null;
+              for (const val of phoneVariations) {
+                const silenceSnap = await (0, import_firestore.getDoc)((0, import_firestore.doc)(db, "whatsapp_silence", val));
+                if (silenceSnap.exists()) {
+                  const data = silenceSnap.data();
+                  if (data && Date.now() < (data.silencedUntil || 0)) {
+                    isSilenced = true;
+                    silenceData = data;
+                    break;
+                  }
+                }
+              }
+              if (isSilenced) {
+                const silencedUntil = silenceData?.silencedUntil || 0;
+                const minutesLeft = Math.ceil((silencedUntil - Date.now()) / 6e4);
+                console.log(`[Agent Silence Mode] Contact ${fromNumber} (variations: ${phoneVariations.join(", ")}) is in agent silence mode. Remaining: ${minutesLeft} minutes. Skipping AI response.`);
+                addWebhookLog("system", `Rob\xF4 Silenciado (Atendimento Humano Recente)`, `O rob\xF4 n\xE3o responder\xE1 ${customerName} (${fromNumber}) porque um atendente humano respondeu recentemente. Sil\xEAncio ativo por mais ${minutesLeft} minutos.`);
+                if (messageId) {
+                  try {
+                    await (0, import_firestore.setDoc)((0, import_firestore.doc)(db, "processed_messages", messageId), {
+                      processedAt: (/* @__PURE__ */ new Date()).toISOString(),
+                      agentSilenced: true
+                    });
+                  } catch (e) {
+                  }
+                }
+                return;
+              }
+            }
+          } catch (e) {
+            console.error("[Agent Silence Check Error]", e.message);
+          }
         }
         if (rawAudioUrl) {
           try {
@@ -2155,7 +1987,7 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
             await saveWhatsAppHistory(fromNumber, updatedHistory, customerName);
             const fallbackAccountId = chatwootAccountId || storedConfig.chatwootAccountId || 1;
             if (chatwootApiAccessToken && fallbackAccountId && chatwootConversationId) {
-              await fetch(`${cleanUrl}/api/v1/accounts/${fallbackAccountId}/conversations/${chatwootConversationId}/messages`, {
+              const fResponse = await fetch(`${cleanUrl}/api/v1/accounts/${fallbackAccountId}/conversations/${chatwootConversationId}/messages`, {
                 method: "POST",
                 headers: {
                   "api-access-token": chatwootApiAccessToken,
@@ -2167,6 +1999,10 @@ IMPORTANTE: Retorne APENAS o array JSON v\xE1lido, sem cercas de c\xF3digo (mark
                   private: false
                 })
               });
+              const fResult = await fResponse.json().catch(() => ({}));
+              if (fResult && fResult.id) {
+                botSentMessageIds.add(String(fResult.id));
+              }
             }
             return;
           }
@@ -2311,6 +2147,9 @@ ${msg.parts[0].text}`;
               })
             });
             const cwResult = await cwResponse.json().catch(() => ({}));
+            if (cwResult && cwResult.id) {
+              botSentMessageIds.add(String(cwResult.id));
+            }
             if (cwResponse.ok) {
               addWebhookLog("system", `Mensagem enviada com sucesso via API do Chatwoot`, `Enviado para a conversa #${chatwootConversationId}.`);
             } else {
@@ -2434,14 +2273,14 @@ ${msg.parts[0].text}`;
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path2.default.join(process.cwd(), "dist");
+    const distPath = import_path.default.join(process.cwd(), "dist");
     app.use(import_express.default.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(import_path2.default.join(distPath, "index.html"));
+      res.sendFile(import_path.default.join(distPath, "index.html"));
     });
   }
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT} (http://0.0.0.0:${PORT})`);
+    console.log(`Server running on port ${PORT} (http://localhost:${PORT})`);
     const keepAliveUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL;
     if (keepAliveUrl) {
       console.log(`[Keep-Alive] Configurando ping autom\xE1tico a cada 4 minutos para ${keepAliveUrl}/api/health`);
